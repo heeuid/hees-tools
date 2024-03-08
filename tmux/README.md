@@ -1,0 +1,3 @@
+# Tmux
+
+- Ubuntu: ~/.tmux.conf

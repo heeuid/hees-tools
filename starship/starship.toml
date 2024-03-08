@@ -1,0 +1,102 @@
+# ~/.config/starship.toml
+# Use custom format
+format = '''
+[┌─](bold green)$username[.](bold)$hostname[.](bold)$shell$python
+[│](bold  green)$directory$git_branch$git_commit$git_state
+[└](bold  green)$character'''
+#[│](bold red)$git_branch$git_commit$os$shell$status$kubernetes$docker_context$c$cmake$dart$golan$lua$perl$python$rust$aws$jobs$container
+# format = '''
+# [┌─](bold red)$username$hostname$os$shell$status$kubernetes$docker_context$c$cmake$dart$golan$lua$perl$python$rust$aws$jobs$container
+# [│](bold red)$directory$git_branch$git_commit
+# [└](bold red)$character'''
+# format = '''
+# [┌─](bold red)$time$git_branch$git_commit$status
+# [├ ](bold red)$username$hostname$shell
+# [├ ](bold red)$directory
+# [└](bold red)[>](bold green) '''
+# format = '''
+# [┌─](bold red)$time$git_branch$git_commit$status
+# [│](bold red)$username$hostname$shell
+# [│](bold red)$directory
+# [└](bold red)[>](bold green) '''
+
+# Wait 10 milliseconds for starship to check files under the current directory.
+scan_timeout = 10
+
+# Disable the blank line at the start of the prompt
+add_newline = false
+
+# Set 'foo' as custom color palette
+palette = 'foo'
+
+# Define custom colors
+[palettes.foo]
+# Overwrite existing color
+blue = '21'
+# Define new color
+mustard = '#af8700'
+
+[username]
+style_user = 'bold fg:green'
+style_root = 'bold fg:green'
+format = '[$user]($style)'
+disabled = false
+show_always = true
+
+[hostname]
+ssh_only = false
+format = '[$hostname](bold fg:#dd6666)'
+trim_at = '.companyname.com'
+disabled = false
+
+[directory]
+repo_root_style = 'bold bg:#dddddd fg:cyan'
+truncate_to_repo = false
+truncation_length = 16
+truncation_symbol = '.../'
+
+[time]
+disabled = true
+format = '🕙[\[ $time \]]($style) '
+time_format = '%T'
+style = "black bold"
+
+[git_branch]
+format = '([$symbol$branch(:$remote_branch)]($style))'
+style = 'italic #888888'
+
+[git_commit]
+#format = '[\($hash$tag\)]($style) '
+format = '[.$hash$tag]($style) '
+disabled = false
+commit_hash_length = 6
+tag_symbol = '🔖 '
+tag_disabled = false
+only_detached = false
+style = 'italic #888888'
+#style = '#006600'
+
+[status]
+format = '$symbol[$status]($style) '
+style = '#00bb00'
+pipestatus = true
+map_symbol = true
+disabled = false
+
+[os]
+format = '[$name](#668866)'
+disabled = false
+
+[shell]
+style = 'yellow'
+disabled = false
+
+[python]
+format = '[via](italic #888888) [${pyenv_prefix}(py_${version} )(\($virtualenv\) )](italic #888888)'
+
+# [memory_usage]
+# format = 'via $symbol [${ram}.${ram_pct}( | ${swap}.${swap_pct})]($style) '
+# disabled = false
+# threshold = -1
+# symbol = ' '
+# style = 'bold dimmed green'

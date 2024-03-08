@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+
+import os
+import mimetypes
+import re
+import argparse
+
+def is_text_file(file_path):
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type is not None and mime_type.startswith('text')
+
+def clean_whitespace_in_file(file_path):
+    changed = False
+    temp_file_path = file_path + '.temp'
+    with open(file_path, 'r') as file, open(temp_file_path, 'w') as temp_file:
+        for line in file:
+            rstripped_line = line.rstrip()
+            if rstripped_line + '\n' != line:
+                changed = True
+            temp_file.write(rstripped_line + '\n')
+    if changed:
+        os.replace(temp_file_path, file_path)
+    return changed
+
+def process_directory_or_file(file_regex, directory, recursive=False):
+    pattern = re.compile(file_regex)
+    files = []
+
+    def process_directory(directory):
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+            if os.path.isdir(file_path) and recursive:
+                process_directory(file_path)
+            elif os.path.isfile(file_path) and is_text_file(file_path) and pattern.match(filename):
+                try:
+                    changed = clean_whitespace_in_file(file_path)
+                except Exception as e:
+                    changed = False
+                    print(f"Error for {file_path}")
+                    print(f"{e}")
+                if changed:
+                    files.append(file_path)
+
+    process_directory(directory)
+
+    if files:
+        print("Whitespace cleanup complete for below text files:")
+        for i, file_path in enumerate(files):
+            print(f"{i + 1}. {file_path}")
+    else:
+        print("No text files were modified.")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Clean up whitespace at the end of lines in text files.")
+    parser.add_argument("file_regex", help="Regex pattern to filter files by name")
+    parser.add_argument("directory", help="Directory path to process")
+    parser.add_argument("-r", "--recursive", action="store_true", help="Recursively process files in subdirectories")
+    args = parser.parse_args()
+
+    process_directory_or_file(args.file_regex, args.directory, args.recursive)

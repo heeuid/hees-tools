@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import mimetypes
+
+def is_text_file(file_path):
+    # 파일의 MIME 타입 추정
+    mime_type, _ = mimetypes.guess_type(file_path)
+    # MIME 타입이 'text'로 시작하는 경우에만 True 반환
+    return mime_type is not None and mime_type.startswith('text')
+
+def clean_carage_return_in_file(file_path):
+    temp_file_path = file_path + '.temp'
+    with open(file_path, 'r') as file, open(temp_file_path, 'w') as temp_file:
+        for line in file:
+            no_cr_line = line.replace('\r', '')
+            temp_file.write(no_cr_line)
+    os.replace(temp_file_path, file_path)
+
+def process_directory_or_file(path):
+    if os.path.isfile(path) and is_text_file(path):
+        clean_carage_return_in_file(path)
+        print(f"Whitespace cleanup complete for file: {path}")
+    elif os.path.isdir(path):
+        for filename in os.listdir(path):
+            file_path = os.path.join(path, filename)
+            if os.path.isfile(file_path) and is_text_file(file_path):
+                clean_carage_return_in_file(file_path)
+        print(f"Carage return cleanup complete for text files in directory: {path}")
+    else:
+        print("The specified path does not exist or is not a text file.")
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <path_to_file_or_directory>")
+        sys.exit(1)
+
+    path = sys.argv[1]
+    process_directory_or_file(path)
+
+
