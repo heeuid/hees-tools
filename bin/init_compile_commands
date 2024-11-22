@@ -1,0 +1,58 @@
+#!/bin/sh
+
+if [ "$1" = "help" ]; then
+    echo "Usage: $0 [OPTIONS] [FILE_PATH]"
+    echo "OPTIONS:"
+    printf " -s, --sep: delete [ \\\t]*\"{GCC_OPTION}\", "
+    exit 1
+fi
+
+# Define options
+#OPTIONS="a:b:c"
+#LONGOPTIONS="alpha:,beta:,gamma"
+OPTIONS="s"
+LONGOPTIONS="sep"
+
+# Parse options
+PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS -- "$@")
+if [ "$?" != "0" ]; then
+    echo "Invalid arguments"
+    exit 1
+fi
+
+# Rearrange the arguments as parsed by getopt
+eval set -- "$PARSED"
+
+SEP="false"
+
+# Process options
+while true; do
+    case "$1" in
+        -s|--sep)
+            SEP="true"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+FILE_PATH="$1"
+if [ "${FILE_PATH}" = "" ]; then
+    FILE_PATH="${PWD}/compile_commands.json"
+fi
+
+if [ "${SEP}" = "true" ]; then
+    sed -i -e "s/[ \t]*\"-fno-allow-store-data-races\",\n//g" \
+        -e "s/[ \t]*\"-fconserve-stack\",\n//g" \
+        -e "s/[ \t]*\"-mabi=lp64\",\n//g" "${FILE_PATH}"
+else
+    sed -i -e "s/-fno-allow-store-data-races//g" \
+        -e "s/-fconserve-stack//g" \
+        -e "s/-mabi=lp64//g" "${FILE_PATH}"
+fi
