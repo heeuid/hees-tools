@@ -32,7 +32,7 @@ config.keys = {
   { key = '_', mods = 'ALT|SHIFT', action = act.SplitVertical { domain = 'CurrentPaneDomain' }, },
   { key = "|", mods = "ALT|SHIFT", action = act.SplitHorizontal { domain = 'CurrentPaneDomain' }, },
   { key = "q", mods = "ALT", action = act.CloseCurrentPane { confirm = false }, },
-  -- nevigate among panes
+  -- navigate among panes
   { key = 'h', mods = 'ALT', action = act.ActivatePaneDirection 'Left', },
   { key = 'LeftArrow', mods = 'ALT', action = act.ActivatePaneDirection 'Left', },
   { key = 'j', mods = 'ALT', action = act.ActivatePaneDirection 'Down', },
@@ -50,25 +50,29 @@ config.keys = {
   { key = 'UpArrow', mods = 'ALT|SHIFT', action = act.AdjustPaneSize { 'Up', 5 }, },
   { key = 'l', mods = 'ALT|SHIFT', action = act.AdjustPaneSize { 'Right', 5 }, },
   { key = 'RightArrow', mods = 'ALT|SHIFT', action = act.AdjustPaneSize { 'Right', 5 }, },
+  -- swap pane
+  { key = 's', mods = 'ALT', action = act.PaneSelect { mode = 'SwapWithActive' } },
 
   -- WINDOW & TAB
   { key = "c", mods = "ALT", action = act.SpawnTab 'CurrentPaneDomain', },
-  { key = "c", mods = "ALT|SHIFT", action = act.SpawnWindow, },
+  { key = "t", mods = "ALT", action = act.SpawnWindow, },
   { key = "x", mods = "ALT", action = act.CloseCurrentTab { confirm = false }, },
   { key = "n", mods = "ALT", action = act.ActivateTabRelative(1), },
   { key = "p", mods = "ALT", action = act.ActivateTabRelative(-1), },
 
-  -- ETC
-  { key = "c", mods = "CTRL|ALT", action = act.ActivateCopyMode, },
-  { key = "f", mods = "ALT", action = act.Search('CurrentSelectionOrEmptyString'), },
-  { key = "z", mods = "ALT", action = act.TogglePaneZoomState, },
-  { key = "z", mods = "CTRL|ALT", action = act.ToggleFullScreen, },
+  -- SCROLL
   { key = 'u', mods = 'ALT', action = act.ScrollByLine(-5) },
   { key = 'd', mods = 'ALT', action = act.ScrollByLine(5) },
   { key = 'u', mods = 'ALT|SHIFT', action = act.ScrollByPage(-0.5) },
   { key = 'd', mods = 'ALT|SHIFT', action = act.ScrollByPage(0.5) },
   { key = 'u', mods = 'CTRL|ALT', action = act.ScrollToTop },
   { key = 'd', mods = 'CTRL|ALT', action = act.ScrollToBottom },
+
+  -- ETC
+  { key = "c", mods = "CTRL|ALT", action = act.ActivateCopyMode, },
+  { key = "f", mods = "ALT", action = act.Search('CurrentSelectionOrEmptyString'), },
+  { key = "z", mods = "ALT", action = act.TogglePaneZoomState, },
+  { key = "z", mods = "CTRL|ALT", action = act.ToggleFullScreen, },
 }  -- configs.keys
 
 -- TAB
