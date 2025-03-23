@@ -24,6 +24,10 @@ config.font = wezterm.font(
   }
 )
 
+config.window_padding = {
+  left = 1, right = 1, top = 1, bottom = 1
+}
+
 config.leader = { key = "e", mods = "ALT" }
 
 config.keys = {
