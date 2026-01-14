@@ -1,3 +1,4 @@
 # Alacritty
 
-- Ubuntu: ~/.config/alacritty/alacritty.toml
+- Ubuntu: $HOME/.config/alacritty/alacritty.toml
+- Windows: %APPDATA%\alacritty\alacritty.toml
