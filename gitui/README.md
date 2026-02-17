@@ -1,3 +1,3 @@
 # Gitui
 
-~/.config/gituit/key_bindings.ron
+~/.config/gitui/key_bindings.ron
