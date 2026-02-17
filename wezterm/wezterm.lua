@@ -30,6 +30,8 @@ config.window_padding = {
 	bottom = 1,
 }
 
+config.hide_mouse_cursor_when_typing = false
+
 -- config.leader = { key = "e", mods = "ALT" }
 
 config.keys = {
