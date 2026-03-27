@@ -49,6 +49,11 @@ config.keys = {
 	{ key = "UpArrow", mods = "ALT", action = act.ActivatePaneDirection("Up") },
 	{ key = "l", mods = "ALT", action = act.ActivatePaneDirection("Right") },
 	{ key = "RightArrow", mods = "ALT", action = act.ActivatePaneDirection("Right") },
+  -- unbind
+  { key = "LeftArrow", mods = "CTRL|SHIFT", action = act.DisableDefaultAssignment },
+  { key = "DownArrow", mods = "CTRL|SHIFT", action = act.DisableDefaultAssignment },
+  { key = "UpArrow", mods = "CTRL|SHIFT", action = act.DisableDefaultAssignment },
+  { key = "RightArrow", mods = "CTRL|SHIFT", action = act.DisableDefaultAssignment },
 	-- resize pane
 	{ key = "h", mods = "ALT|SHIFT", action = act.AdjustPaneSize({ "Left", 5 }) },
 	{ key = "LeftArrow", mods = "ALT|SHIFT", action = act.AdjustPaneSize({ "Left", 5 }) },
