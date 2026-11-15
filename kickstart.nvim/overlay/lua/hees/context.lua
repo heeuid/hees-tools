@@ -1,0 +1,357 @@
+-- Context menus: what the right mouse button (or <leader>m / Shift+F10) shows depends on where
+-- it was clicked — an editor buffer, a neo-tree node, or a buffer tab.
+
+local menu = require 'hees.menu'
+local util = require 'hees.util'
+
+local M = {}
+
+local sep = { sep = true }
+
+local function lsp_supports(method)
+  return function()
+    for _, client in ipairs(vim.lsp.get_clients { bufnr = 0 }) do
+      if client:supports_method(method, 0) then return true end
+    end
+    return false
+  end
+end
+
+local function has_lsp() return #vim.lsp.get_clients { bufnr = 0 } > 0 end
+local function has_git() return vim.b.gitsigns_status_dict ~= nil end
+local function dap() return package.loaded['dap'] end
+local function dap_session() return dap() ~= nil and dap().session() ~= nil end
+local function has_telescope() return package.loaded['telescope'] ~= nil end
+
+local function copy_path(path)
+  vim.fn.setreg('+', path)
+  vim.fn.setreg('"', path)
+  vim.notify('Copied: ' .. path)
+end
+
+--- Open the OS file manager with `path` selected (Windows) or its folder shown (Linux/macOS).
+local function reveal_in_os(path)
+  local cmd
+  if util.is_win then
+    cmd = { 'explorer.exe', '/select,' .. vim.fs.normalize(path):gsub('/', '\\') }
+  elseif vim.fn.has 'mac' == 1 then
+    cmd = { 'open', '-R', path }
+  else
+    cmd = { 'xdg-open', vim.fn.isdirectory(path) == 1 and path or vim.fs.dirname(path) }
+  end
+  vim.system(cmd, { detach = true })
+end
+
+local function lsp_items(visual)
+  if visual then
+    return {
+      { label = 'Code action', hint = 'gra', action = 'gra', enabled = lsp_supports 'textDocument/codeAction' },
+      { label = 'Format selection', hint = '<leader>f', action = '<leader>f', enabled = has_lsp },
+    }
+  end
+  return {
+    { label = 'Rename symbol', hint = 'grn', action = 'grn', enabled = lsp_supports 'textDocument/rename' },
+    { label = 'Code action', hint = 'gra', action = 'gra', enabled = lsp_supports 'textDocument/codeAction' },
+    { label = 'Format buffer', hint = '<leader>f', action = '<leader>f' },
+    { label = 'Hover documentation', hint = 'K', action = 'K', enabled = lsp_supports 'textDocument/hover' },
+    { label = 'Signature help', action = vim.lsp.buf.signature_help, enabled = lsp_supports 'textDocument/signatureHelp' },
+    sep,
+    {
+      label = 'Go to',
+      items = {
+        { label = 'Definition', hint = 'grd', action = 'grd', enabled = lsp_supports 'textDocument/definition' },
+        { label = 'Implementation', hint = 'gri', action = 'gri', enabled = lsp_supports 'textDocument/implementation' },
+        { label = 'Type definition', hint = 'grt', action = 'grt', enabled = lsp_supports 'textDocument/typeDefinition' },
+        { label = 'Declaration', hint = 'grD', action = 'grD', enabled = lsp_supports 'textDocument/declaration' },
+        { label = 'References', hint = 'grr', action = 'grr', enabled = lsp_supports 'textDocument/references' },
+      },
+    },
+    {
+      label = 'Symbols',
+      items = {
+        { label = 'Document symbols', hint = 'gO', action = 'gO', enabled = lsp_supports 'textDocument/documentSymbol' },
+        { label = 'Workspace symbols', hint = 'gW', action = 'gW', enabled = lsp_supports 'workspace/symbol' },
+      },
+    },
+    {
+      label = 'Diagnostics',
+      items = {
+        { label = 'Show line diagnostics', action = vim.diagnostic.open_float },
+        { label = 'Next diagnostic', hint = ']d', action = ']d' },
+        { label = 'Previous diagnostic', hint = '[d', action = '[d' },
+        { label = 'Diagnostics list', hint = '<leader>q', action = '<leader>q' },
+      },
+    },
+    sep,
+    {
+      label = 'Inlay hints',
+      hint = '<leader>th',
+      action = '<leader>th',
+      enabled = lsp_supports 'textDocument/inlayHint',
+      checked = vim.lsp.inlay_hint.is_enabled { bufnr = 0 },
+    },
+    { label = 'Restart LSP', action = function() vim.cmd 'lsp restart' end, enabled = has_lsp },
+    { label = 'LSP health', action = function() vim.cmd 'checkhealth vim.lsp' end },
+  }
+end
+
+local function debug_items()
+  return {
+    { label = dap_session() and 'Continue' or 'Start debugging', hint = '<F5>', action = '<F5>' },
+    { label = 'Run to cursor', action = function() dap().run_to_cursor() end },
+    { label = 'Terminate', action = function() dap().terminate() end, enabled = dap_session },
+    {
+      label = 'Step',
+      enabled = dap_session,
+      items = {
+        { label = 'Step over', hint = '<F2>', action = '<F2>' },
+        { label = 'Step into', hint = '<F1>', action = '<F1>' },
+        { label = 'Step out', hint = '<F3>', action = '<F3>' },
+      },
+    },
+    sep,
+    { label = 'Toggle breakpoint', hint = '<leader>b', action = '<leader>b' },
+    {
+      label = 'Breakpoints',
+      items = {
+        { label = 'Conditional breakpoint…', hint = '<leader>B', action = '<leader>B' },
+        { label = 'Log point…', action = function() dap().set_breakpoint(nil, nil, vim.fn.input 'Log message: ') end },
+        { label = 'List breakpoints', action = function() dap().list_breakpoints(true) end },
+        { label = 'Clear all breakpoints', action = function() dap().clear_breakpoints() end },
+      },
+    },
+    sep,
+    { label = 'Toggle debug UI', hint = '<F7>', action = '<F7>' },
+    { label = 'Toggle REPL', action = function() dap().repl.toggle() end },
+  }
+end
+
+local function git_items(visual)
+  if visual then
+    return {
+      { label = 'Stage selected lines', hint = '<leader>hs', action = '<leader>hs' },
+      { label = 'Reset selected lines', hint = '<leader>hr', action = '<leader>hr' },
+    }
+  end
+  return {
+    { label = 'Preview hunk', hint = '<leader>hp', action = '<leader>hp' },
+    { label = 'Preview hunk inline', hint = '<leader>hi', action = '<leader>hi' },
+    { label = 'Next hunk', hint = ']c', action = ']c' },
+    { label = 'Previous hunk', hint = '[c', action = '[c' },
+    sep,
+    { label = 'Stage hunk', hint = '<leader>hs', action = '<leader>hs' },
+    { label = 'Reset hunk', hint = '<leader>hr', action = '<leader>hr' },
+    { label = 'Stage buffer', hint = '<leader>hS', action = '<leader>hS' },
+    sep,
+    { label = 'Blame line', hint = '<leader>hb', action = '<leader>hb' },
+    { label = 'Diff against index', hint = '<leader>hd', action = '<leader>hd' },
+    { label = 'Diff against last commit', hint = '<leader>hD', action = '<leader>hD' },
+  }
+end
+
+local function search_items(visual)
+  if visual then return { { label = 'Search selection', hint = '<leader>sw', action = '<leader>sw' } } end
+  return {
+    { label = 'Find files', hint = '<leader>sf', action = '<leader>sf' },
+    { label = 'Grep', hint = '<leader>sg', action = '<leader>sg' },
+    { label = 'Search word under cursor', hint = '<leader>sw', action = '<leader>sw' },
+    { label = 'Search in buffer', hint = '<leader>/', action = '<leader>/' },
+    { label = 'Recent files', hint = '<leader>s.', action = '<leader>s.' },
+    { label = 'Diagnostics', hint = '<leader>sd', action = '<leader>sd' },
+    { label = 'Keymaps', hint = '<leader>sk', action = '<leader>sk' },
+    { label = 'Help', hint = '<leader>sh', action = '<leader>sh' },
+  }
+end
+
+local function buffer_items(visual)
+  local file = vim.api.nvim_buf_get_name(0)
+  local editable = vim.bo.modifiable
+  local file_items = {
+    { label = 'Reveal in explorer', hint = '\\', action = '\\' },
+    { label = 'Copy file path', action = function() copy_path(file) end },
+    { label = 'Open containing folder', action = function() reveal_in_os(file) end },
+  }
+  local groups = {
+    { label = 'LSP', items = function() return lsp_items(visual) end, enabled = has_lsp },
+    { label = 'Debug', items = debug_items, enabled = function() return not visual and dap() ~= nil end },
+    { label = 'AI next edit', items = function() return require('hees.nes').menu_items(visual) end },
+    { label = 'Git', items = function() return git_items(visual) end, enabled = has_git },
+    { label = 'Search', items = function() return search_items(visual) end, enabled = has_telescope },
+    sep,
+    { label = 'File', items = file_items, enabled = file ~= '' },
+  }
+  if visual then
+    return vim.list_extend({
+      { label = 'Cut', hint = 'd', action = 'd', enabled = editable },
+      { label = 'Copy', hint = 'y', action = 'y' },
+      { label = 'Paste over selection', hint = 'p', action = 'p', enabled = editable },
+      sep,
+    }, groups)
+  end
+  return vim.list_extend({
+    { label = 'Paste', hint = 'P', action = 'P', enabled = editable },
+    {
+      label = 'Edit',
+      items = {
+        { label = 'Undo', hint = 'u', action = 'u', enabled = editable },
+        { label = 'Redo', hint = '<C-r>', action = '<C-r>', enabled = editable },
+        { label = 'Select all', hint = 'ggVG', action = 'ggVG' },
+      },
+    },
+    sep,
+    { label = 'Go to definition', hint = 'grd', action = 'grd', enabled = lsp_supports 'textDocument/definition' },
+    { label = 'Find references', hint = 'grr', action = 'grr', enabled = lsp_supports 'textDocument/references' },
+    sep,
+  }, groups)
+end
+
+--- Menu for a neo-tree node. `state` is neo-tree's filesystem state for that window.
+local function explorer_items(state)
+  local node = state.tree and state.tree:get_node()
+  if not node or not node.path then return {} end
+  local fs = require 'neo-tree.sources.filesystem.commands'
+  local run = function(name)
+    return function() fs[name](state) end
+  end
+  local is_file = node.type == 'file'
+  local has_clip = state.clipboard ~= nil and next(state.clipboard) ~= nil
+  local cwd = vim.fn.getcwd()
+  return {
+    { label = is_file and 'Open' or 'Expand / collapse', hint = '<CR>', action = run 'open' },
+    {
+      label = 'Open in',
+      enabled = is_file,
+      items = {
+        { label = 'Vertical split', hint = 's', action = run 'open_vsplit' },
+        { label = 'Horizontal split', hint = 'S', action = run 'open_split' },
+        { label = 'New tab', hint = 't', action = run 'open_tabnew' },
+      },
+    },
+    sep,
+    { label = 'New file…', hint = 'a', action = run 'add' },
+    { label = 'New folder…', hint = 'A', action = run 'add_directory' },
+    { label = 'Rename…', hint = 'r', action = run 'rename' },
+    { label = 'Delete', hint = 'd', action = run 'delete' },
+    sep,
+    { label = 'Copy', hint = 'y', action = run 'copy_to_clipboard' },
+    { label = 'Cut', hint = 'x', action = run 'cut_to_clipboard' },
+    { label = 'Paste', hint = 'p', action = run 'paste_from_clipboard', enabled = has_clip },
+    sep,
+    {
+      label = 'Path',
+      items = {
+        { label = 'Copy absolute path', action = function() copy_path(node.path) end },
+        { label = 'Copy relative path', action = function() copy_path(vim.fs.relpath(cwd, node.path) or node.path) end },
+        { label = 'Show in system file manager', action = function() reveal_in_os(node.path) end },
+      },
+    },
+    {
+      label = 'View',
+      items = {
+        { label = 'Toggle hidden files', hint = 'H', action = run 'toggle_hidden' },
+        { label = 'Refresh', hint = 'R', action = run 'refresh' },
+        { label = 'Close explorer', hint = '\\', action = function() vim.cmd 'Neotree close' end },
+      },
+    },
+  }
+end
+
+local function tab_items(bufnr)
+  local file = vim.api.nvim_buf_get_name(bufnr)
+  local function on_buf(cmd)
+    return function()
+      vim.api.nvim_set_current_buf(bufnr)
+      vim.cmd(cmd)
+    end
+  end
+  return {
+    { label = 'Close', action = function() require('mini.bufremove').delete(bufnr, false) end },
+    { label = 'Close others', action = on_buf 'BufferLineCloseOthers' },
+    { label = 'Close to the right', action = on_buf 'BufferLineCloseRight' },
+    { label = 'Close to the left', action = on_buf 'BufferLineCloseLeft' },
+    sep,
+    { label = 'Pin / unpin', action = on_buf 'BufferLineTogglePin' },
+    { label = 'Open in vertical split', action = function() vim.cmd('vertical sbuffer ' .. bufnr) end },
+    { label = 'Open in horizontal split', action = function() vim.cmd('sbuffer ' .. bufnr) end },
+    sep,
+    { label = 'Copy file path', action = function() copy_path(file) end, enabled = file ~= '' },
+    { label = 'Reveal in explorer', action = on_buf 'Neotree reveal', enabled = file ~= '' },
+  }
+end
+
+function M.open_tab_menu(bufnr) menu.open(tab_items(bufnr)) end
+
+local function neo_tree_state(win)
+  local ok, manager = pcall(require, 'neo-tree.sources.manager')
+  if not ok then return nil end
+  -- The sidebar's state belongs to the tab; a window-keyed state only exists for
+  -- "current window" (netrw-style) trees.
+  local state = manager.get_state 'filesystem'
+  if state.winid == win and state.tree then return state end
+  state = manager.get_state('filesystem', nil, win)
+  if state.tree then return state end
+  return nil
+end
+
+--- Open the menu for whatever is under the mouse pointer.
+---@param visual boolean? the click happened in visual mode (keep the selection)
+function M.open_at_mouse(visual)
+  local mp = vim.fn.getmousepos()
+  local win = mp.winid
+  local info = win ~= 0 and vim.fn.getwininfo(win)[1]
+  -- Tabline, statusline, gutter, and other plugins' floats keep their own right-click behavior.
+  local in_text = info and mp.line > 0 and mp.wincol > info.textoff and vim.api.nvim_win_get_config(win).relative == ''
+  if not in_text then return vim.api.nvim_feedkeys(vim.keycode '<RightMouse>', 'n', false) end
+
+  if not visual then
+    vim.api.nvim_set_current_win(win)
+    pcall(vim.api.nvim_win_set_cursor, win, { mp.line, math.max(mp.column - 1, 0) })
+  end
+  local anchor = { row = mp.screenrow - 1, col = mp.screencol - 1, visual = visual }
+  if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == 'neo-tree' then
+    local state = neo_tree_state(win)
+    if state then return menu.open(explorer_items(state), anchor) end
+  end
+  menu.open(buffer_items(visual), anchor)
+end
+
+--- Open the menu at the cursor (keyboard entry point).
+---@param visual boolean?
+function M.open_at_cursor(visual)
+  local row, col = menu.cursor_anchor()
+  local anchor = { row = row, col = col, visual = visual }
+  if vim.bo.filetype == 'neo-tree' then
+    local state = neo_tree_state(vim.api.nvim_get_current_win())
+    if state then return menu.open(explorer_items(state), anchor) end
+  end
+  menu.open(buffer_items(visual), anchor)
+end
+
+--- Leave visual mode first so the '< and '> marks are set; actions restore it with `gv`.
+local function from_visual(fn)
+  return function()
+    vim.cmd 'normal! \27'
+    fn(true)
+  end
+end
+
+function M.setup()
+  vim.keymap.set('n', '<RightMouse>', function() M.open_at_mouse(false) end, { desc = 'Context menu' })
+  vim.keymap.set('x', '<RightMouse>', from_visual(M.open_at_mouse), { desc = 'Context menu' })
+  vim.keymap.set('i', '<RightMouse>', function()
+    vim.cmd.stopinsert()
+    vim.schedule(function() M.open_at_mouse(false) end)
+  end, { desc = 'Context menu' })
+  for _, lhs in ipairs { '<leader>m', '<S-F10>' } do
+    vim.keymap.set('n', lhs, function() M.open_at_cursor(false) end, { desc = 'Context [M]enu' })
+    vim.keymap.set('x', lhs, from_visual(M.open_at_cursor), { desc = 'Context [M]enu' })
+  end
+end
+
+-- Exposed for tests.
+M._buffer_items = buffer_items
+M._explorer_items = explorer_items
+M._tab_items = tab_items
+M._neo_tree_state = neo_tree_state
+
+return M

@@ -5,3 +5,4 @@ collection of tools which I am using or used
 2. starship : cross shell prompt (written in Rust)
 3. tmux     : a terminal multiplexer
 4. bin      : collection of execute files
+5. kickstart.nvim: kickstart.nvim installer/updater, Neovim version manager, right-click menus and AI next edit suggestions

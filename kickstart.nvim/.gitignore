@@ -1,0 +1,4 @@
+# Neovim versions installed by nvim-version.ps1 / nvim-version.sh (and the source checkout for --build)
+versions/
+# NVIM_APPNAME chosen at install time, read by bin/nvk and the scripts
+.appname
