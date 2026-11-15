@@ -4,7 +4,9 @@
 
 .DESCRIPTION
   버전은 이 폴더의 versions\<이름>\ 에 나란히 설치되고, versions\current 정션이 사용 중인 버전을 가리킵니다.
-  bin\nvk.cmd 가 versions\current\bin\nvim.exe 를 실행합니다. 시스템에 설치된 Neovim은 건드리지 않습니다.
+  처음 버전을 고를 때 versions\current\bin 을 시스템 PATH 맨 앞에 넣어(관리자 확인 한 번) 그냥 `nvim` 으로
+  사용 중인 버전이 실행되게 합니다. 이 경로는 버전을 바꿔도 같아서 다시 등록할 필요가 없습니다.
+  다른 곳에 설치된 Neovim 파일은 건드리지 않습니다 (PATH 에서 뒤로 밀릴 뿐).
 
   install <stable|nightly|vX.Y.Z>   공식 릴리스 받기
   install -Build <git ref>          소스에서 빌드 (git, cmake, C 컴파일러 필요. MSVC면 Developer PowerShell에서)
@@ -14,8 +16,10 @@
   update                            최신 안정판을 설치하고 그 버전으로 바꾸기
   remove <이름>                     버전 삭제 (사용 중이면 -Force 필요)
   current                           사용 중인 버전
+  path / unpath                     versions\current\bin 을 시스템 PATH 맨 앞에 넣기 / 빼기
 
   -Name 은 설치 이름을 직접 정하고, -Use 는 설치 후 바로 그 버전으로 바꿉니다. -Force 는 같은 이름을 덮어씁니다.
+  -NoPath 는 PATH 를 건드리지 않습니다.
 
 .EXAMPLE
   .\nvim-version.ps1 install stable
@@ -25,7 +29,7 @@
 #>
 [CmdletBinding()]
 param(
-  [Parameter(Position = 0)][ValidateSet('install', 'use', 'list', 'update', 'remove', 'current', 'help')][string]$Command = 'help',
+  [Parameter(Position = 0)][ValidateSet('install', 'use', 'list', 'update', 'remove', 'current', 'path', 'unpath', 'help')][string]$Command = 'help',
   [Parameter(Position = 1)][string]$Target,
   [string]$Build,
   [string]$From,
@@ -33,6 +37,7 @@ param(
   [string]$Generator,
   [switch]$Remote,
   [switch]$Use,
+  [switch]$NoPath,
   [switch]$Force
 )
 
@@ -41,6 +46,87 @@ $Tag = 'nvim-version'
 $Repo = 'neovim/neovim'
 $Current = Join-Path $Versions 'current'
 $Tmp = Join-Path $Versions '.tmp'
+$BinDir = Join-Path $Current 'bin'
+$EnvKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+
+# [[ PATH ]]
+# Windows searches the machine PATH before the user PATH, and other Neovim installs sit in the machine PATH,
+# so versions\current\bin has to go first there. The raw value is edited (no expansion) and written back as
+# REG_EXPAND_SZ so entries like %NVM_HOME% keep working.
+
+function Test-Admin {
+  $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+  return ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Test-SameDir([string]$A, [string]$B) { return $A.TrimEnd('\') -ieq $B.TrimEnd('\') }
+
+function Get-MachinePathEntries {
+  $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($EnvKey)
+  try { $raw = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } finally { $key.Close() }
+  return @($raw -split ';' | Where-Object { $_ })
+}
+
+function Set-MachinePathEntries([string[]]$Entries) {
+  $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($EnvKey, $true)
+  try { $key.SetValue('Path', ($Entries -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString) } finally { $key.Close() }
+  # Tell Explorer and new terminals that the environment changed.
+  if (-not ('Hees.Env' -as [type])) {
+    Add-Type -Namespace Hees -Name Env -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
+  }
+  $result = [UIntPtr]::Zero
+  [void][Hees.Env]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
+}
+
+function Update-SessionPath([bool]$Add) {
+  $rest = @($env:Path -split ';' | Where-Object { $_ -and -not (Test-SameDir $_ $BinDir) })
+  if ($Add) { $rest = @($BinDir) + $rest }
+  $env:Path = $rest -join ';'
+}
+
+# Re-run this script elevated for `path` / `unpath`; returns $true on success.
+function Invoke-Elevated([string]$Sub) {
+  $shell = (Get-Process -Id $PID).Path
+  try {
+    $p = Start-Process -FilePath $shell -Verb RunAs -Wait -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", $Sub)
+    return ($p.ExitCode -eq 0)
+  } catch {
+    return $false
+  }
+}
+
+function Register-Path {
+  $entries = Get-MachinePathEntries
+  if ($entries.Count -gt 0 -and (Test-SameDir $entries[0] $BinDir)) {
+    Update-SessionPath $true
+    return
+  }
+  if (Test-Admin) {
+    Set-MachinePathEntries (@($BinDir) + @($entries | Where-Object { -not (Test-SameDir $_ $BinDir) }))
+    Say $Tag "시스템 PATH 맨 앞에 추가: $BinDir"
+  } else {
+    Say $Tag "nvim 이 이 버전으로 실행되도록 시스템 PATH 맨 앞에 $BinDir 를 넣습니다 (관리자 확인 창이 뜹니다)"
+    if (-not (Invoke-Elevated 'path')) {
+      Warn $Tag "시스템 PATH 를 바꾸지 못했습니다. 관리자 PowerShell 에서 .\nvim-version.ps1 path 를 실행하세요."
+      return
+    }
+    Say $Tag "시스템 PATH 맨 앞에 추가: $BinDir"
+  }
+  Update-SessionPath $true
+  Say $Tag '열려 있는 다른 터미널은 다시 열어야 새 PATH 가 적용됩니다'
+}
+
+function Unregister-Path {
+  $entries = Get-MachinePathEntries
+  if (-not ($entries | Where-Object { Test-SameDir $_ $BinDir })) { Say $Tag 'PATH 에 없습니다'; return }
+  if (Test-Admin) {
+    Set-MachinePathEntries @($entries | Where-Object { -not (Test-SameDir $_ $BinDir) })
+  } elseif (-not (Invoke-Elevated 'unpath')) {
+    Fail $Tag '시스템 PATH 를 바꾸지 못했습니다. 관리자 PowerShell 에서 다시 실행하세요.'
+  }
+  Update-SessionPath $false
+  Say $Tag "시스템 PATH 에서 뺐습니다: $BinDir"
+}
 
 function Get-Asset {
   if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { return 'nvim-win-arm64.zip' }
@@ -109,6 +195,7 @@ function Set-Current([string]$VersionName) {
   Remove-Junction $Current
   New-Item -ItemType Junction -Path $Current -Target $dir | Out-Null
   Say $Tag "사용 버전 → $VersionName"
+  if (-not $NoPath) { Register-Path }
 }
 
 # Move a staged Neovim into versions\<name>; returns the name.
@@ -270,6 +357,8 @@ switch ($Command) {
     Say $Tag "삭제: $Target"
   }
   'list' { Show-List }
+  'path' { Register-Path }
+  'unpath' { Unregister-Path }
   'current' {
     $cur = Get-CurrentName
     if ($cur) { Write-Host $cur } else { Say $Tag '선택된 버전이 없습니다' }

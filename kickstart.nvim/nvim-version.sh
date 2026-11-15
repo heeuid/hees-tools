@@ -2,7 +2,8 @@
 # Neovim 설치·업데이트·버전 교체 (Linux/macOS).
 #
 # 버전은 이 폴더의 versions/<이름>/ 에 나란히 설치되고, versions/current 심볼릭 링크가 사용 중인 버전을 가리킵니다.
-# bin/nvk 가 versions/current/bin/nvim 을 실행합니다. 시스템에 설치된 Neovim 은 건드리지 않습니다.
+# 버전을 고를 때 ~/.local/bin/nvim → versions/current/bin/nvim 링크를 만들어 그냥 `nvim` 으로 실행되게 합니다.
+# 시스템에 설치된 Neovim 은 건드리지 않습니다.
 #
 #   install <stable|nightly|vX.Y.Z>    공식 릴리스 받기
 #   install --build <git ref>          소스에서 빌드 (git, cmake, C 컴파일러, gettext 필요)
@@ -12,8 +13,10 @@
 #   update                             최신 안정판을 설치하고 그 버전으로 바꾸기
 #   remove <이름> [--force]            버전 삭제
 #   current                            사용 중인 버전
+#   path / unpath                      ~/.local/bin/nvim 링크 만들기 / 지우기
 #
-# 옵션: --name <이름> 설치 이름 지정, --use 설치 후 전환, --force 같은 이름 덮어쓰기, --generator <cmake 생성기>
+# 옵션: --name <이름> 설치 이름 지정, --use 설치 후 전환, --force 같은 이름 덮어쓰기, --generator <cmake 생성기>,
+#       --no-path ~/.local/bin/nvim 링크를 만들지 않음
 #
 #   ./nvim-version.sh install stable
 #   ./nvim-version.sh install --build master --use
@@ -26,7 +29,37 @@ REPO=neovim/neovim
 CURRENT=$VERSIONS/current
 TMP=$VERSIONS/.tmp
 
-usage() { sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+LINK=$HOME/.local/bin/nvim
+
+usage() { sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+# ~/.local/bin/nvim → versions/current/bin/nvim. The link target never changes, so switching versions keeps it valid.
+link_path() {
+  local target=$CURRENT/bin/nvim
+  if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+    warn "$LINK 가 링크가 아닌 파일이라 건드리지 않습니다. 직접 옮긴 뒤 ./nvim-version.sh path 를 실행하세요."
+    return
+  fi
+  mkdir -p "$(dirname "$LINK")"
+  ln -sfn "$target" "$LINK"
+  say "링크: $LINK → $target"
+  hash -r
+  local found
+  found=$(command -v nvim || true)
+  if [ "$found" != "$LINK" ]; then
+    warn "PATH 에서 ${found:-다른 nvim} 이 먼저 잡힙니다. 셸 설정(~/.bashrc 등)에 다음 줄을 넣고 새 셸을 여세요:"
+    warn '  export PATH="$HOME/.local/bin:$PATH"'
+  fi
+}
+
+unlink_path() {
+  if [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$CURRENT/bin/nvim" ]; then
+    rm -f "$LINK"
+    say "삭제: $LINK"
+  else
+    say "$LINK 는 이 스크립트가 만든 링크가 아닙니다"
+  fi
+}
 
 asset_name() {
   local os arch
@@ -87,6 +120,7 @@ set_current() {
   [ -x "$dir/bin/nvim" ] || fail "설치되지 않은 버전입니다: $1 (list 로 확인)"
   ln -sfn "$1" "$CURRENT"
   say "사용 버전 → $1"
+  [ -n "$OPT_NO_PATH" ] || link_path
 }
 
 new_tmp() {
@@ -221,9 +255,10 @@ list_versions() {
 
 CMD=${1:-help}
 [ $# -gt 0 ] && shift
-TARGET= OPT_BUILD= OPT_FROM= OPT_NAME= OPT_GENERATOR= OPT_REMOTE= OPT_USE= OPT_FORCE=
+TARGET= OPT_BUILD= OPT_FROM= OPT_NAME= OPT_GENERATOR= OPT_REMOTE= OPT_USE= OPT_FORCE= OPT_NO_PATH=
 while [ $# -gt 0 ]; do
   case "$1" in
+  --no-path) OPT_NO_PATH=1 ;;
   --build) OPT_BUILD=$2; shift ;;
   --from) OPT_FROM=$2; shift ;;
   --name) OPT_NAME=$2; shift ;;
@@ -270,6 +305,8 @@ remove)
   say "삭제: $TARGET"
   ;;
 list) list_versions ;;
+path) link_path ;;
+unpath) unlink_path ;;
 current) current_name || say "선택된 버전이 없습니다" ;;
 *) usage ;;
 esac

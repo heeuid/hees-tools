@@ -1,8 +1,9 @@
 #!/bin/sh
-# Start the Neovim selected with nvim-version.sh using the kickstart config (NVIM_APPNAME).
+# Start the Neovim selected with nvim-version.sh with the installed config (NVIM_APPNAME from .appname).
+# Not needed for the default install, where plain `nvim` does the same; useful for --app installs.
 here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 vers=${HEES_NVIM_VERSIONS:-$here/versions}
-app=kickstart
+app=nvim
 [ -s "$here/.appname" ] && app=$(head -n1 "$here/.appname")
 if [ ! -x "$vers/current/bin/nvim" ]; then
   echo "nvk: no Neovim selected. Run: $here/nvim-version.sh install stable" >&2

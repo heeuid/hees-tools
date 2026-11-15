@@ -4,7 +4,8 @@
 
 - kickstart가 가진 기능은 kickstart 것을 씁니다: 탐색기(`kickstart.plugins.neo-tree`), 디버거(`kickstart.plugins.debug`), LSP/검색/git 키.
 - 더하는 것: 우클릭 메뉴, 클릭 가능한 버퍼 탭·거터, NES(Claude / Codex / Gemini).
-- Neovim 버전은 이 폴더의 `versions/`에 나란히 설치합니다. 시스템에 설치된 Neovim과 기존 `nvim` 설정은 그대로 둡니다.
+- 설치가 끝나면 그냥 `nvim`으로 실행합니다. 설정은 Neovim 기본 경로에, 실행 파일은 PATH 맨 앞에 들어갑니다.
+- 기존 설정(예: LazyVim)은 덮어쓰지 않고 `*.bak-<시각>`으로 옮겨 둡니다. 다른 곳에 설치된 Neovim 파일은 건드리지 않습니다.
 
 kickstart 최신판은 플러그인 관리자로 `vim.pack`을 쓰므로 **Neovim 0.12 이상**이 필요합니다.
 
@@ -18,25 +19,31 @@ kickstart 최신판은 플러그인 관리자로 `vim.pack`을 쓰므로 **Neovi
 | kickstart.nvim | `kickstart.ps1` | `kickstart.sh` | 설치·업데이트·상태 |
 | 이 저장소의 플러그인 | `plugins.ps1` | `plugins.sh` | 설치·업데이트·제거·상태 |
 | 전체 | `install.ps1` / `update.ps1` | `install.sh` / `update.sh` | 위 셋을 차례로 |
-| 실행 | `bin\nvk.cmd` | `bin/nvk` | 선택한 Neovim을 kickstart 설정으로 실행 |
+| (선택) 실행 | `bin\nvk.cmd` | `bin/nvk` | `-AppName`/`--app`으로 나란히 설치했을 때만 필요 |
 
 ### 처음 설치
 
 ```powershell
 # Windows
-.\install.ps1 -NerdFont -Yes -AddToPath   # -Yes: 없는 도구를 winget으로 설치, -AddToPath: bin\ 을 사용자 PATH에
-nvk
+.\install.ps1 -NerdFont -Yes   # -Yes: 없는 도구를 winget으로 설치
+nvim                           # 새 터미널에서
 ```
 
 ```bash
 # Linux/macOS
-./install.sh --nerd-font --yes --link-bin   # --yes: apt/dnf/pacman/brew로 설치, --link-bin: ~/.local/bin/nvk
-nvk
+./install.sh --nerd-font --yes   # --yes: apt/dnf/pacman/brew로 설치
+nvim
 ```
 
-- 설정은 `NVIM_APPNAME=kickstart`로 설치됩니다: Windows `%LOCALAPPDATA%\kickstart`, Linux `~/.config/kickstart`.
-  다른 이름은 `-AppName`/`--app`으로 정합니다.
-- `-Default`/`--default`는 기본 `nvim` 설정 자리에 설치합니다. 기존 설정과 데이터는 `*.bak-<시각>`으로 옮겨 둡니다.
+- **설정 위치**: Neovim 기본 경로 Windows `%LOCALAPPDATA%\nvim`, Linux `~/.config/nvim`.
+  그 자리에 있던 설정·데이터는 `nvim.bak-<시각>`, `nvim-data.bak-<시각>`(Linux는 `~/.local/share`, `~/.local/state`, `~/.cache`의 `nvim`도)으로 옮겨 둡니다.
+  되돌리려면 새 폴더를 지우고 `.bak-` 폴더 이름을 원래대로 바꾸면 됩니다.
+- **`nvim` 실행 파일**: Windows는 `versions\current\bin`을 시스템 PATH 맨 앞에 넣습니다(관리자 확인 창 한 번).
+  Windows는 시스템 PATH를 사용자 PATH보다 먼저 찾기 때문에, 시스템 PATH에 다른 Neovim이 있으면 이렇게 해야 새 버전이 실행됩니다.
+  Linux는 `~/.local/bin/nvim` 링크를 만듭니다. 이 경로는 버전을 바꿔도 같으므로 한 번만 등록됩니다.
+  `-NoPath`/`--no-path`로 끌 수 있고, 나중에 `nvim-version path` / `unpath`로 넣거나 뺄 수 있습니다.
+- **나란히 설치**: `-AppName <이름>`/`--app <이름>`을 주면 기본 경로 대신 `<이름>` 폴더에 설치하고 기존 설정은 그대로 둡니다.
+  이때는 `NVIM_APPNAME=<이름>`으로 실행하거나 `bin\nvk.cmd`/`bin/nvk`를 씁니다.
 - `-NerdFont`/`--nerd-font`는 kickstart의 `vim.g.have_nerd_font = true`를 켭니다. Nerd Font가 아닌 글꼴에서는 켜지 마세요.
   꺼져 있으면 아이콘은 일반 유니코드 도형(▸ ✓ ● ◆)으로 표시합니다.
 
@@ -165,7 +172,6 @@ kickstart의 키는 그대로입니다: 탐색기 `\`, 디버그 `F5` `F1` `F2` 
 ## 테스트
 
 ```powershell
-$env:NVIM_APPNAME = 'kickstart'
 nvim --headless -c "luafile tests/smoke.lua"      # 메뉴, 컨텍스트 메뉴, NES 파싱/표시/적용, 백엔드 명령 (CLI 호출 없음)
 nvim --headless -c "luafile tests/nes-live.lua"   # 실제 CLI로 NES 한 번씩 (HEES_LIVE_BACKENDS=claude,codex 로 고르기)
 ```
@@ -179,7 +185,7 @@ kickstart.nvim/
 ├─ nvim-version.ps1 / .sh         Neovim 버전 관리
 ├─ kickstart.ps1 / .sh            kickstart.nvim 설치·업데이트
 ├─ plugins.ps1 / .sh              overlay 설치·업데이트·제거
-├─ bin/nvk.cmd  bin/nvk           실행기
+├─ bin/nvk.cmd  bin/nvk           (선택) -AppName 으로 나란히 설치했을 때의 실행기
 ├─ overlay/lua/                   kickstart 설정에 복사되는 플러그인
 │  ├─ custom/plugins/hees.lua
 │  └─ hees/ (ui, menu, context, util, nes/)

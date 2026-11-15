@@ -15,14 +15,15 @@ fail() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# NVIM_APPNAME used by nvk and all scripts: --app, else what kickstart.sh recorded, else 'kickstart'.
+# Config name (NVIM_APPNAME): --app, else what kickstart.sh recorded, else 'nvim' — Neovim's default
+# location, so plain `nvim` uses it.
 app_name() {
   if [ -n "${1:-}" ]; then
     printf '%s' "$1"
   elif [ -s "$APPNAME_FILE" ]; then
     head -n1 "$APPNAME_FILE"
   else
-    printf 'kickstart'
+    printf 'nvim'
   fi
 }
 

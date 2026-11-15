@@ -16,14 +16,15 @@ function Fail([string]$Tag, [string]$Message) {
   exit 1
 }
 
-# NVIM_APPNAME used by nvk and all scripts: -AppName, else what kickstart.ps1 recorded, else 'kickstart'.
+# Config name (NVIM_APPNAME): -AppName, else what kickstart.ps1 recorded, else 'nvim' — Neovim's default
+# location, so plain `nvim` uses it.
 function Get-AppName([string]$Requested) {
   if ($Requested) { return $Requested }
   if (Test-Path -LiteralPath $script:AppNameFile) {
     $name = (Get-Content -LiteralPath $script:AppNameFile -TotalCount 1).Trim()
     if ($name) { return $name }
   }
-  return 'kickstart'
+  return 'nvim'
 }
 
 function Get-ConfigDir([string]$App) { Join-Path $env:LOCALAPPDATA $App }

@@ -12,8 +12,9 @@
     debug.lua 의 중단점 아이콘 블록, DAP 어댑터 codelldb(C/C++/Rust)·python(debugpy) 추가
     -NerdFont 면 vim.g.have_nerd_font = true
 
-  기본 설치 위치는 NVIM_APPNAME=kickstart (%LOCALAPPDATA%\kickstart) 로, 기존 %LOCALAPPDATA%\nvim 설정과 나란히 둡니다.
-  -Default 를 주면 %LOCALAPPDATA%\nvim 에 설치하되 기존 nvim, nvim-data 를 *.bak-<시각> 으로 옮겨 둡니다.
+  Neovim 기본 경로 %LOCALAPPDATA%\nvim 에 설치합니다. 그곳에 다른 설정(예: LazyVim)이 있으면
+  nvim, nvim-data 를 nvim.bak-<시각>, nvim-data.bak-<시각> 으로 옮겨 두고 설치합니다 (덮어쓰지 않음).
+  -AppName <이름> 을 주면 기본 경로 대신 %LOCALAPPDATA%\<이름> 에 나란히 설치합니다 (NVIM_APPNAME=<이름> 으로 실행).
 
 .EXAMPLE
   .\kickstart.ps1 install -NerdFont -Yes
@@ -23,12 +24,10 @@
 param(
   [Parameter(Position = 0)][ValidateSet('install', 'update', 'status', 'help')][string]$Command = 'help',
   [string]$AppName,
-  [switch]$Default,
   [switch]$NerdFont,
   [string]$Repo = 'https://github.com/nvim-lua/kickstart.nvim.git',
   [switch]$Yes,
   [switch]$SkipDeps,
-  [switch]$AddToPath,
   [switch]$NoSync,
   [switch]$Force
 )
@@ -38,7 +37,6 @@ $Tag = 'kickstart'
 $Patch = Join-Path $Here 'tools\patch-kickstart.lua'
 $PatchedFiles = @('init.lua', 'lua/kickstart/plugins/debug.lua')
 
-if ($Default) { $AppName = 'nvim' }
 $App = Get-AppName $AppName
 $Cfg = Get-ConfigDir $App
 
@@ -92,13 +90,6 @@ function Invoke-Patch([string[]]$Extra) {
   return $LASTEXITCODE
 }
 
-function Add-UserPath([string]$Dir) {
-  $path = [Environment]::GetEnvironmentVariable('Path', 'User')
-  if (($path -split ';') -contains $Dir) { Say $Tag "PATH 에 이미 있습니다: $Dir"; return }
-  [Environment]::SetEnvironmentVariable('Path', ($path.TrimEnd(';') + ";$Dir"), 'User')
-  Say $Tag "사용자 PATH 에 추가: $Dir (새 터미널부터 nvk 사용 가능)"
-}
-
 function Install-Kickstart {
   Say $Tag "설치 위치: $Cfg (NVIM_APPNAME=$App)"
   if (-not $SkipDeps) { Say $Tag '필요 도구 점검'; Test-Deps }
@@ -125,9 +116,8 @@ function Install-Kickstart {
   $extra = @()
   if ($NerdFont) { $extra += '--nerd-font' }
   Invoke-Patch $extra | Out-Null
-  if ($AddToPath) { Add-UserPath (Join-Path $Here 'bin') }
   if (-not $NoSync) { Invoke-Sync $Tag $App 'install' '' }
-  Say $Tag "완료. 실행: $(Join-Path $Here 'bin\nvk.cmd')"
+  if ($App -eq 'nvim') { Say $Tag '완료. 실행: nvim' } else { Say $Tag "완료. 실행: NVIM_APPNAME=$App 로 nvim (또는 bin\nvk.cmd)" }
 }
 
 function Update-Kickstart {

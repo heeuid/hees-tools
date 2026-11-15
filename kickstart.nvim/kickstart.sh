@@ -10,11 +10,11 @@
 #   debug.lua 의 중단점 아이콘 블록, DAP 어댑터 codelldb(C/C++/Rust)·python(debugpy) 추가
 #   --nerd-font 면 vim.g.have_nerd_font = true
 #
-# 기본 위치는 NVIM_APPNAME=kickstart (~/.config/kickstart) 로 기존 ~/.config/nvim 과 나란히 둡니다.
-# --default 를 주면 ~/.config/nvim 에 설치하되 기존 nvim 설정/데이터/상태/캐시를 *.bak-<시각> 으로 옮겨 둡니다.
+# Neovim 기본 경로 ~/.config/nvim 에 설치합니다. 그곳에 다른 설정(예: LazyVim)이 있으면 nvim 설정/데이터/상태/캐시를
+# *.bak-<시각> 으로 옮겨 두고 설치합니다 (덮어쓰지 않음).
+# --app <이름> 을 주면 기본 경로 대신 ~/.config/<이름> 에 나란히 설치합니다 (NVIM_APPNAME=<이름> 으로 실행).
 #
-# 옵션: --app <이름> --default --nerd-font --repo <url> --yes(없는 도구 자동 설치) --skip-deps
-#       --link-bin(~/.local/bin/nvk 링크) --no-sync --force
+# 옵션: --app <이름> --nerd-font --repo <url> --yes(없는 도구 자동 설치) --skip-deps --no-sync --force
 #
 #   ./kickstart.sh install --nerd-font --yes
 #   ./kickstart.sh update
@@ -25,21 +25,19 @@ TAG=kickstart
 PATCH=$HERE/tools/patch-kickstart.lua
 PATCHED_FILES=(init.lua lua/kickstart/plugins/debug.lua)
 
-usage() { sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 CMD=${1:-help}
 [ $# -gt 0 ] && shift
-OPT_APP= OPT_DEFAULT= OPT_NERD= OPT_YES= OPT_SKIP_DEPS= OPT_LINK= OPT_NO_SYNC= OPT_FORCE=
+OPT_APP= OPT_NERD= OPT_YES= OPT_SKIP_DEPS= OPT_NO_SYNC= OPT_FORCE=
 REPO=https://github.com/nvim-lua/kickstart.nvim.git
 while [ $# -gt 0 ]; do
   case "$1" in
   --app) OPT_APP=$2; shift ;;
-  --default) OPT_DEFAULT=1 ;;
   --nerd-font) OPT_NERD=1 ;;
   --repo) REPO=$2; shift ;;
   --yes) OPT_YES=1 ;;
   --skip-deps) OPT_SKIP_DEPS=1 ;;
-  --link-bin) OPT_LINK=1 ;;
   --no-sync) OPT_NO_SYNC=1 ;;
   --force) OPT_FORCE=1 ;;
   -h | --help) CMD=help ;;
@@ -47,7 +45,6 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[ -n "$OPT_DEFAULT" ] && OPT_APP=nvim
 APP=$(app_name "$OPT_APP")
 CFG=$(config_dir "$APP")
 
@@ -140,13 +137,8 @@ do_install() {
 
   printf '%s\n' "$APP" >"$APPNAME_FILE"
   if [ -n "$OPT_NERD" ]; then patch --nerd-font; else patch; fi
-  if [ -n "$OPT_LINK" ]; then
-    mkdir -p "$HOME/.local/bin"
-    ln -sfn "$HERE/bin/nvk" "$HOME/.local/bin/nvk"
-    say "링크: ~/.local/bin/nvk → $HERE/bin/nvk"
-  fi
   [ -n "$OPT_NO_SYNC" ] || run_sync "$APP" install
-  say "완료. 실행: $HERE/bin/nvk"
+  if [ "$APP" = nvim ]; then say "완료. 실행: nvim"; else say "완료. 실행: NVIM_APPNAME=$APP nvim (또는 $HERE/bin/nvk)"; fi
 }
 
 do_update() {
