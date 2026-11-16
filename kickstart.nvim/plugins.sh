@@ -23,7 +23,7 @@ TAG=plugins
 
 OVERLAY=$HERE/overlay
 # Plugins the overlay adds with vim.pack (kept in sync with overlay/lua/hees/colors.lua, ui.lua, window_picker.lua).
-PACK_PLUGINS=(catppuccin bufferline.nvim statuscol.nvim nvim-window-picker)
+PACK_PLUGINS=(catppuccin bufferline.nvim statuscol.nvim nvim-window-picker aerial.nvim)
 # Paths the overlay owns inside the config. lua/custom/plugins/hees.lua is the old entry point;
 # it is listed so updates delete it and the overlay isn't loaded twice.
 OWNED=(plugin/hees.lua lua/hees lua/custom/plugins/hees.lua)

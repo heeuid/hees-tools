@@ -116,6 +116,17 @@ kickstart의 `git status`에 나타나지 않습니다.
 
   목록은 `tools/patch-kickstart.lua`의 `LSP` 표에서 바꿉니다.
 
+### 코드 구조 보기 (outline, 호출·타입 계층)
+
+- **Outline 사이드바** (`<Space>o`, 우클릭 **LSP ▸ Structure ▸ Outline sidebar** 또는 **File ▸ Code outline**):
+  [aerial.nvim](https://github.com/stevearc/aerial.nvim)으로 지금 파일의 클래스·메서드·함수·필드·변수·상수를 오른쪽 창에 트리로 보여 줍니다.
+  커서를 따라 지금 있는 위치가 강조되고, `Enter`나 더블클릭으로 그 코드로 이동합니다. LSP가 없으면 treesitter로 읽습니다.
+  kickstart의 `gO`(telescope로 한 번 띄우는 심볼 목록)는 그대로입니다.
+- **호출 계층** (우클릭 **LSP ▸ Structure ▸ Call hierarchy ▸**): Incoming(이 함수를 부르는 곳) / Outgoing(이 함수가 부르는 것). 결과는 quickfix 목록.
+- **타입 계층** (**LSP ▸ Structure ▸ Type hierarchy ▸**): Supertypes / Subtypes.
+- 호출·타입 계층은 Neovim 내장 LSP 기능이라 서버가 지원해야 합니다(지원하지 않으면 메뉴가 흐리게 표시). clangd, rust-analyzer, pyright는 호출 계층을 지원합니다.
+- 실행 중의 호출 스택은 디버거 기능입니다: 디버깅 중 dap-ui의 Stacks 창, 또는 AI 디버그 분석(`<Space>ag`).
+
 ### 출력 기록
 
 스크립트가 화면에 낸 모든 출력은 `logs/<시각>-<스크립트>.log`에도 남습니다(`install`이 부른 다른 스크립트 출력도 같은 파일에).
@@ -288,6 +299,7 @@ kickstart 키와 Neovim 기본 키는 바꾸지 않습니다. 이 설정이 새�
 |---|---|---|
 | 오른쪽 클릭 | 노멀/비주얼/입력 | 컨텍스트 메뉴 (기본 PopUp 메뉴 대신) |
 | `<Space>m`, `Shift+F10` | 노멀/비주얼 | 컨텍스트 메뉴 |
+| `<Space>o` | 노멀 | 코드 구조(outline) 사이드바 열기·닫기 |
 | `<Space>a…` | 노멀/비주얼 | AI: 다음 편집, 코드·디버그 분석, 작업별 백엔드/모델, 요청 기록 (위 표) |
 
 kickstart의 키는 그대로입니다: 탐색기 `\`, 디버그 `F5` `F1` `F2` `F3` `F7` `<Space>b` `<Space>B`, LSP `grd` `grr` `gri` `grt` `grD` `grn` `gra` `gO` `gW`, 검색 `<Space>s…`, git `<Space>h…`.
@@ -311,7 +323,7 @@ kickstart.nvim/
 ├─ bin/nvk.cmd  bin/nvk           (선택) -AppName 으로 나란히 설치했을 때의 실행기
 ├─ overlay/                       kickstart 설정에 복사되는 플러그인
 │  ├─ plugin/hees.lua             진입점 (init.lua 다음에 자동 로드)
-│  └─ lua/hees/ (colors, ui, window_picker, explorer, menu, context, util, nes/, ai/)
+│  └─ lua/hees/ (colors, ui, window_picker, explorer, outline, menu, context, util, nes/, ai/)
 ├─ logs/                          (git 제외) 스크립트 출력 기록
 ├─ tools/
 │  ├─ patch-kickstart.lua         kickstart 자체 기능 켜기 (두 OS 공통, nvim -l 로 실행)

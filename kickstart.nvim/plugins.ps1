@@ -36,7 +36,7 @@ $App = Get-AppName $AppName
 $Cfg = Get-ConfigDir $App
 $Overlay = Join-Path $Here 'overlay'
 # Plugins the overlay adds with vim.pack (kept in sync with overlay\lua\hees\colors.lua, ui.lua, window_picker.lua).
-$PackPlugins = @('catppuccin', 'bufferline.nvim', 'statuscol.nvim', 'nvim-window-picker')
+$PackPlugins = @('catppuccin', 'bufferline.nvim', 'statuscol.nvim', 'nvim-window-picker', 'aerial.nvim')
 # Paths the overlay owns inside the config, relative to it. lua/custom/plugins/hees.lua is the old
 # entry point; it is listed so updates delete it and the overlay isn't loaded twice.
 $Owned = @('plugin/hees.lua', 'lua/hees', 'lua/custom/plugins/hees.lua')

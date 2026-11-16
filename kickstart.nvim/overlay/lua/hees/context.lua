@@ -67,10 +67,28 @@ local function lsp_items(visual)
       },
     },
     {
-      label = 'Symbols',
+      label = 'Structure',
       items = {
+        { label = 'Outline sidebar', hint = '<leader>o', action = function() vim.cmd 'AerialToggle' end },
         { label = 'Document symbols', hint = 'gO', action = 'gO', enabled = lsp_supports 'textDocument/documentSymbol' },
         { label = 'Workspace symbols', hint = 'gW', action = 'gW', enabled = lsp_supports 'workspace/symbol' },
+        sep,
+        {
+          label = 'Call hierarchy',
+          enabled = lsp_supports 'textDocument/prepareCallHierarchy',
+          items = {
+            { label = 'Incoming calls (who calls this)', action = function() vim.lsp.buf.incoming_calls() end },
+            { label = 'Outgoing calls (what this calls)', action = function() vim.lsp.buf.outgoing_calls() end },
+          },
+        },
+        {
+          label = 'Type hierarchy',
+          enabled = lsp_supports 'textDocument/prepareTypeHierarchy',
+          items = {
+            { label = 'Supertypes', action = function() vim.lsp.buf.typehierarchy 'supertypes' end },
+            { label = 'Subtypes', action = function() vim.lsp.buf.typehierarchy 'subtypes' end },
+          },
+        },
       },
     },
     {
@@ -189,6 +207,7 @@ local function buffer_items(visual)
   local file = vim.api.nvim_buf_get_name(0)
   local editable = vim.bo.modifiable
   local file_items = {
+    { label = 'Code outline', hint = '<leader>o', action = function() vim.cmd 'AerialToggle' end },
     { label = 'Reveal in explorer', hint = '\\', action = '\\' },
     { label = 'Copy file path', action = function() copy_path(file) end },
     { label = 'Open containing folder', action = function() reveal_in_os(file) end },

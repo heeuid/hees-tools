@@ -21,7 +21,7 @@ end
 
 local function run()
   -- [[ Loading and keymaps ]]
-  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.ai', 'hees.ai.analyze', 'hees.ai.viewer', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap', 'window-picker' } do
+  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.ai', 'hees.ai.analyze', 'hees.ai.viewer', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap', 'window-picker', 'aerial', 'hees.outline' } do
     check('module loaded: ' .. mod, package.loaded[mod] ~= nil)
   end
   local function has_map(mode, lhs) return vim.fn.maparg(lhs, mode) ~= '' end
@@ -345,6 +345,29 @@ local function run()
   check('lsp context: definition of the symbol under the cursor', lctx.definition and lctx.definition.line == 4, vim.inspect(lctx.definition))
   check('lsp context: hover text', #lctx.hover > 0, vim.inspect(lctx.hover))
   check('lsp context: document outline', #lctx.outline >= 2, vim.inspect(lctx.outline))
+
+  -- Outline sidebar (aerial) on the same file.
+  local code_win = vim.api.nvim_get_current_win()
+  require('aerial').open { focus = false }
+  local aerial_buf
+  vim.wait(5000, function()
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local b = vim.api.nvim_win_get_buf(w)
+      if vim.bo[b].filetype == 'aerial' and table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), '\n'):find('total', 1, true) then aerial_buf = b end
+    end
+    return aerial_buf ~= nil
+  end, 100)
+  local outline_text = aerial_buf and table.concat(vim.api.nvim_buf_get_lines(aerial_buf, 0, -1, false), '\n') or ''
+  check('outline: aerial window lists functions and variables', outline_text:find('add', 1, true) and outline_text:find('total', 1, true) and outline_text:find('M', 1, true), outline_text)
+  check('outline: <leader>o mapped', vim.fn.maparg('<Space>o', 'n') ~= '')
+  require('aerial').close()
+  vim.api.nvim_set_current_win(code_win)
+  local structure = vim.tbl_filter(function(it) return it.label == 'Structure' end, ctx._buffer_items and (function()
+    local lsp = vim.tbl_filter(function(it) return it.label == 'LSP' end, ctx._buffer_items(false))[1]
+    return type(lsp.items) == 'function' and lsp.items() or lsp.items
+  end)() or {})[1]
+  local structure_labels = structure and vim.tbl_map(function(it) return it.label or '---' end, structure.items) or {}
+  check('LSP menu: Structure has outline, call and type hierarchy', vim.tbl_contains(structure_labels, 'Outline sidebar') and vim.tbl_contains(structure_labels, 'Call hierarchy') and vim.tbl_contains(structure_labels, 'Type hierarchy'), table.concat(structure_labels, ' | '))
 
   local analyze = require 'hees.ai.analyze'
   local real_build = require('hees.ai.backends').build
