@@ -103,6 +103,71 @@ function Invoke-Sync([string]$Tag, [string]$App, [string]$Mode, [string]$Plugins
   }
 }
 
+# Append a folder to the user PATH (HKCU). The raw value is kept unexpanded and written back as
+# REG_EXPAND_SZ so entries like %USERPROFILE%\bin keep working; the current session sees it too.
+function Add-UserPathEntry([string]$Dir) {
+  if (-not (($env:Path -split ';') -contains $Dir)) { $env:Path = "$Dir;$env:Path" }
+  $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+  try {
+    $raw = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $entries = @($raw -split ';' | Where-Object { $_ })
+    if ($entries | Where-Object { $_.TrimEnd('\') -ieq $Dir.TrimEnd('\') }) { return }
+    $key.SetValue('Path', (($entries + $Dir) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+  } finally { $key.Close() }
+  if (-not ('Hees.Env' -as [type])) {
+    Add-Type -Namespace Hees -Name Env -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
+  }
+  $result = [UIntPtr]::Zero
+  [void][Hees.Env]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
+}
+
+# nvim-treesitter (kickstart) compiles parsers with the tree-sitter CLI; without it there is no syntax
+# highlighting. Install it when missing: the official release exe into
+# %LOCALAPPDATA%\Programs\tree-sitter (added to the user PATH), else `cargo install`. Returns $false
+# if neither worked.
+function Install-TreeSitter([string]$Tag) {
+  $found = Get-Command tree-sitter -ErrorAction SilentlyContinue
+  if ($found) {
+    Say $Tag "tree-sitter CLI: $($found.Source) ($((& $found.Source --version | Select-Object -First 1)))"
+    return $true
+  }
+  $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+  $dir = Join-Path $env:LOCALAPPDATA 'Programs\tree-sitter'
+  $exe = Join-Path $dir 'tree-sitter.exe'
+  $url = "https://github.com/tree-sitter/tree-sitter/releases/latest/download/tree-sitter-windows-$arch.gz"
+  Say $Tag "tree-sitter CLI 설치: 공식 릴리스 → $exe"
+  try {
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $gz = Join-Path $dir 'tree-sitter.gz'
+    Invoke-WebRequest -Uri $url -OutFile $gz -UseBasicParsing
+    $in = [System.IO.File]::OpenRead($gz)
+    $out = [System.IO.File]::Create($exe)
+    try {
+      $unzip = New-Object System.IO.Compression.GZipStream($in, [System.IO.Compression.CompressionMode]::Decompress)
+      $unzip.CopyTo($out)
+    } finally {
+      $out.Dispose()
+      $in.Dispose()
+    }
+    Remove-Item -LiteralPath $gz
+    $version = & $exe --version | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0) { throw "$exe 실행 실패" }
+    Add-UserPathEntry $dir
+    Say $Tag "tree-sitter CLI: $version (사용자 PATH 에 $dir 추가)"
+    return $true
+  } catch {
+    Warn $Tag "공식 실행 파일을 설치하지 못했습니다: $_"
+  }
+  if (Get-Command cargo -ErrorAction SilentlyContinue) {
+    Say $Tag 'tree-sitter CLI 설치: cargo install --locked tree-sitter-cli (소스 빌드, 몇 분 걸립니다)'
+    & cargo install --locked tree-sitter-cli | Out-Host
+    if ($LASTEXITCODE -eq 0) { return $true }
+  }
+  Warn $Tag 'tree-sitter CLI 를 설치하지 못했습니다. 이대로면 문법 색칠(treesitter 파서)이 동작하지 않습니다.'
+  Warn $Tag 'winget install --id tree-sitter.tree-sitter-cli 로 설치한 뒤 이 스크립트를 다시 실행하세요.'
+  return $false
+}
+
 function Invoke-Git([string]$Tag, [string[]]$GitArgs) {
   # Out-Host keeps git's output out of the calling function's return value.
   & git @GitArgs | Out-Host

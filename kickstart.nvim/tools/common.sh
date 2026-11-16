@@ -24,6 +24,69 @@ fail() {
   exit 1
 }
 have() { command -v "$1" >/dev/null 2>&1; }
+fetch() { if have curl; then curl -fsSL -o "$2" "$1"; else wget -qO "$2" "$1"; fi; } # url dest
+
+# Tools installed per user (tree-sitter, the nvim link) live in ~/.local/bin; cargo installs to
+# ~/.cargo/bin. Put both on PATH for these scripts and the headless Neovim they start, and remember
+# the original PATH to tell whether the user's own shell will find them.
+USER_PATH=$PATH
+for dir in "$HOME/.cargo/bin" "$HOME/.local/bin"; do
+  case ":$PATH:" in *":$dir:"*) ;; *) PATH=$dir:$PATH ;; esac
+done
+export PATH
+
+# Warn when a directory isn't on the PATH the user's shell had.
+check_user_path() { # dir
+  case ":$USER_PATH:" in
+  *":$1:"*) ;;
+  *)
+    warn "$1 이 셸 PATH 에 없습니다. 셸 설정(~/.bashrc 등)에 다음 줄을 넣고 새 셸을 여세요:"
+    warn "  export PATH=\"$1:\$PATH\""
+    ;;
+  esac
+}
+
+# nvim-treesitter (kickstart) compiles parsers with the tree-sitter CLI, so without it there is no
+# syntax highlighting. Install it when missing: the official release binary into ~/.local/bin if it
+# runs here (it needs a recent glibc), otherwise `cargo install`. Returns 1 if neither worked.
+ensure_tree_sitter() {
+  if have tree-sitter; then
+    say "tree-sitter CLI: $(command -v tree-sitter) ($(tree-sitter --version 2>/dev/null | head -n1))"
+    return 0
+  fi
+  local asset= dest=$HOME/.local/bin tmp
+  case "$(uname -s)/$(uname -m)" in
+  Linux/x86_64) asset=tree-sitter-linux-x64.gz ;;
+  Linux/aarch64 | Linux/arm64) asset=tree-sitter-linux-arm64.gz ;;
+  Darwin/arm64) asset=tree-sitter-macos-arm64.gz ;;
+  Darwin/x86_64) asset=tree-sitter-macos-x64.gz ;;
+  esac
+  if [ -n "$asset" ]; then
+    say "tree-sitter CLI 설치: 공식 릴리스 $asset → $dest/tree-sitter"
+    mkdir -p "$dest"
+    tmp=$(mktemp)
+    if fetch "https://github.com/tree-sitter/tree-sitter/releases/latest/download/$asset" "$tmp" &&
+      gunzip -c "$tmp" >"$dest/tree-sitter" && chmod +x "$dest/tree-sitter" && "$dest/tree-sitter" --version >/dev/null 2>&1; then
+      rm -f "$tmp"
+      say "tree-sitter CLI: $("$dest/tree-sitter" --version | head -n1)"
+      check_user_path "$dest"
+      return 0
+    fi
+    rm -f "$tmp" "$dest/tree-sitter"
+    warn "공식 실행 파일이 이 시스템에서 실행되지 않습니다 (glibc 2.39 이상 필요). cargo 로 빌드를 시도합니다."
+  fi
+  if have cargo; then
+    say "tree-sitter CLI 설치: cargo install --locked tree-sitter-cli (소스 빌드, 몇 분 걸립니다)"
+    if cargo install --locked tree-sitter-cli; then
+      say "tree-sitter CLI: $(tree-sitter --version | head -n1)"
+      check_user_path "$HOME/.cargo/bin"
+      return 0
+    fi
+  fi
+  warn "tree-sitter CLI 를 설치하지 못했습니다. 이대로면 문법 색칠(treesitter 파서)이 동작하지 않습니다."
+  warn "Rust 를 설치한 뒤(curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh) 이 스크립트를 다시 실행하세요."
+  return 1
+}
 
 # Config name (NVIM_APPNAME): --app, else what kickstart.sh recorded, else 'nvim' — Neovim's default
 # location, so plain `nvim` uses it.

@@ -36,6 +36,12 @@ nvim                           # 새 터미널에서
 nvim
 ```
 
+- **tree-sitter CLI**: kickstart의 nvim-treesitter가 문법 파서를 컴파일할 때 씁니다(없으면 문법 색칠이 동작하지 않음). C 컴파일러도 필요합니다.
+  없으면 설치 스크립트가 옵션과 상관없이 직접 설치합니다. sudo나 패키지 매니저는 쓰지 않습니다.
+  1. GitHub 공식 실행 파일(Linux/macOS `~/.local/bin`, Windows `%LOCALAPPDATA%\Programs\tree-sitter` + 사용자 PATH). 실제로 실행될 때만 씁니다.
+     Linux 실행 파일은 glibc 2.39 이상(Ubuntu 24.04+)이 필요합니다.
+  2. 그게 안 되면 `cargo install --locked tree-sitter-cli`(소스 빌드, 어느 배포판이든 동작, 몇 분).
+  apt 패키지는 없거나 오래된 배포판이 많고, npm 패키지는 1번과 같은 실행 파일이라 쓰지 않습니다.
 - **설정 위치**: Neovim 기본 경로 Windows `%LOCALAPPDATA%\nvim`, Linux `~/.config/nvim`.
   그 자리에 있던 설정·데이터는 `nvim.bak-<시각>`, `nvim-data.bak-<시각>`(Linux는 `~/.local/share`, `~/.local/state`, `~/.cache`의 `nvim`도)으로 옮겨 둡니다.
   되돌리려면 새 폴더를 지우고 `.bak-` 폴더 이름을 원래대로 바꾸면 됩니다.

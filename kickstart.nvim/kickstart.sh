@@ -56,8 +56,8 @@ DEPS=(
   "unzip|unzip|unzip|unzip|unzip"
   "rg|ripgrep|ripgrep|ripgrep|ripgrep"
   "fd fdfind|fd-find|fd-find|fd|fd"
-  "tree-sitter|tree-sitter-cli|tree-sitter-cli|tree-sitter-cli|tree-sitter-cli"
 )
+# The tree-sitter CLI is not in older distro repos; ensure_tree_sitter (tools/common.sh) installs it.
 
 pkg_manager() {
   for pm in apt-get dnf pacman brew; do have "$pm" && { echo "$pm"; return; }; done
@@ -88,7 +88,7 @@ check_deps() {
     dnf) sudo dnf install -y "${pkgs[@]}" ;;
     pacman) sudo pacman -S --needed --noconfirm "${pkgs[@]}" ;;
     brew) brew install "${pkgs[@]}" ;;
-    esac || warn "일부 패키지를 설치하지 못했습니다 (배포판에 tree-sitter-cli 가 없으면 npm i -g tree-sitter-cli 또는 cargo install tree-sitter-cli)"
+    esac || warn "일부 패키지를 설치하지 못했습니다"
   elif [ -n "$missing_git" ]; then
     fail "git 이 필요합니다. --yes 로 자동 설치하거나 직접 설치하세요."
   else
@@ -114,6 +114,7 @@ do_install() {
     say "필요 도구 점검"
     check_deps
   fi
+  ensure_tree_sitter || true
   if [ -z "$(find_nvim)" ]; then
     say "Neovim 이 없어 최신 안정판을 설치합니다"
     "$HERE/nvim-version.sh" install stable
@@ -144,6 +145,7 @@ do_install() {
 do_update() {
   is_kickstart_clone "$CFG" || fail "$CFG 에 kickstart.nvim 이 없습니다. 먼저 install 하세요."
   require_nvim >/dev/null
+  ensure_tree_sitter || true
   if ! patch --check && [ -z "$OPT_FORCE" ]; then
     fail "위 파일에 직접 고친 내용이 있습니다. 커밋하거나 옮긴 뒤 다시 실행하세요 (--force 는 그 수정을 버립니다)."
   fi

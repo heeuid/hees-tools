@@ -90,12 +90,14 @@ case "$CMD" in
 install)
   require_kickstart
   copy_overlay
+  ensure_tree_sitter || true
   [ -n "$OPT_NO_SYNC" ] || run_sync "$APP" install
   say "완료. 우클릭 또는 <Space>m 으로 메뉴, <Space>a 로 NES 를 쓸 수 있습니다."
   ;;
 update)
   require_kickstart
   copy_overlay
+  ensure_tree_sitter || true
   [ -n "$OPT_NO_SYNC" ] || run_sync "$APP" update "$(IFS=,; echo "${PACK_PLUGINS[*]}")"
   say "업데이트 완료"
   ;;

@@ -94,12 +94,14 @@ switch ($Command) {
   'install' {
     Assert-Kickstart
     Copy-Overlay
+    Install-TreeSitter $Tag | Out-Null
     if (-not $NoSync) { Invoke-Sync $Tag $App 'install' '' }
     Say $Tag '완료. 우클릭 또는 <Space>m 으로 메뉴, <Space>a 로 NES 를 쓸 수 있습니다.'
   }
   'update' {
     Assert-Kickstart
     Copy-Overlay
+    Install-TreeSitter $Tag | Out-Null
     if (-not $NoSync) { Invoke-Sync $Tag $App 'update' ($PackPlugins -join ',') }
     Say $Tag '업데이트 완료'
   }

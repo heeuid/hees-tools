@@ -46,9 +46,9 @@ $Deps = @(
   @{ Name = 'make'; Cmds = @('make'); Id = 'ezwinports.make' },
   @{ Name = 'C compiler'; Cmds = @('gcc', 'clang', 'cl', 'zig'); Id = 'BrechtSanders.WinLibs.POSIX.UCRT' },
   @{ Name = 'ripgrep'; Cmds = @('rg'); Id = 'BurntSushi.ripgrep.MSVC' },
-  @{ Name = 'fd'; Cmds = @('fd'); Id = 'sharkdp.fd' },
-  @{ Name = 'tree-sitter CLI'; Cmds = @('tree-sitter'); Id = 'tree-sitter.tree-sitter-cli' }
+  @{ Name = 'fd'; Cmds = @('fd'); Id = 'sharkdp.fd' }
 )
+# The tree-sitter CLI is installed separately by Install-TreeSitter (tools\common.ps1).
 
 function Test-Deps {
   $missing = @()
@@ -93,6 +93,7 @@ function Invoke-Patch([string[]]$Extra) {
 function Install-Kickstart {
   Say $Tag "설치 위치: $Cfg (NVIM_APPNAME=$App)"
   if (-not $SkipDeps) { Say $Tag '필요 도구 점검'; Test-Deps }
+  Install-TreeSitter $Tag | Out-Null
   if (-not (Get-Nvim)) {
     Say $Tag 'Neovim 이 없어 최신 안정판을 설치합니다'
     & (Join-Path $Here 'nvim-version.ps1') install stable
@@ -123,6 +124,7 @@ function Install-Kickstart {
 function Update-Kickstart {
   if (-not (Test-KickstartClone $Cfg)) { Fail $Tag "$Cfg 에 kickstart.nvim 이 없습니다. 먼저 install 하세요." }
   Assert-Nvim $Tag | Out-Null
+  Install-TreeSitter $Tag | Out-Null
   if ((Invoke-Patch @('--check')) -ne 0 -and -not $Force) {
     Fail $Tag "위 파일에 직접 고친 내용이 있습니다. 커밋하거나 옮긴 뒤 다시 실행하세요 (-Force 는 그 수정을 버립니다)."
   }

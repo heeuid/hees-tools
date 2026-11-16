@@ -46,6 +46,43 @@ local function mason_installing()
   return names
 end
 
+--- The parsers kickstart installs (`local parsers = { ... }` in its init.lua).
+local function kickstart_parsers()
+  local f = io.open(vim.fs.joinpath(vim.fn.stdpath 'config', 'init.lua'), 'r')
+  if not f then return {} end
+  local list = f:read('*a'):match 'local parsers = (%b{})'
+  f:close()
+  local names = {}
+  for name in (list or ''):gmatch "'([%w_]+)'" do
+    table.insert(names, name)
+  end
+  return names
+end
+
+local function have_c_compiler()
+  for _, cc in ipairs { 'cc', 'gcc', 'clang', 'cl', 'zig' } do
+    if vim.fn.executable(cc) == 1 then return true end
+  end
+  return false
+end
+
+--- Wait for kickstart's parser installs to finish (they run asynchronously at startup).
+local function wait_parsers()
+  local ok, ts = pcall(require, 'nvim-treesitter')
+  local parsers = kickstart_parsers()
+  if not ok or #parsers == 0 then return end
+  if vim.fn.executable 'tree-sitter' == 0 then
+    say 'tree-sitter CLI 가 없어 treesitter 파서를 설치할 수 없습니다 (설치 스크립트가 설치합니다).'
+    return
+  end
+  if not have_c_compiler() then
+    say 'C 컴파일러(gcc/clang)가 없어 treesitter 파서를 컴파일할 수 없습니다. Linux: sudo apt install build-essential'
+    return
+  end
+  say('treesitter 파서 설치 확인: ' .. table.concat(parsers, ', '))
+  pcall(function() ts.install(parsers):wait(timeout) end)
+end
+
 --- What is actually on in this config, read from the running Neovim.
 local function report()
   say '─── 결과 ───'
@@ -72,6 +109,19 @@ local function report()
     say(('mason 도구 %d개  %s'):format(#names, table.concat(names, ', ')))
   end
   if missing > 0 then say(('설치 안 된 LSP %d개: 네트워크를 확인하고 다시 실행하거나 :Mason 에서 확인하세요'):format(missing)) end
+
+  local has_ts, ts = pcall(require, 'nvim-treesitter')
+  local wanted = kickstart_parsers()
+  if has_ts and #wanted > 0 then
+    local installed = {}
+    for _, name in ipairs(ts.get_installed 'parsers') do
+      installed[name] = true
+    end
+    local absent = vim.tbl_filter(function(name) return not installed[name] end, wanted)
+    say(('treesitter 파서 %d/%d개 설치됨%s'):format(#wanted - #absent, #wanted, #absent > 0 and ('  없음: ' .. table.concat(absent, ', ')) or ''))
+    local cli = vim.fn.exepath 'tree-sitter'
+    say('tree-sitter CLI  ' .. (cli ~= '' and cli or '없음 — 파서를 설치할 수 없어 문법 색칠이 동작하지 않습니다'))
+  end
 end
 
 local function main()
@@ -108,6 +158,7 @@ local function main()
     return false
   end, 1000)
   if not finished then say '20분이 지나도 mason 설치가 끝나지 않아 중단합니다. 다시 실행하면 이어서 설치합니다.' end
+  wait_parsers()
   report()
   say 'done'
   vim.cmd 'qa!'
