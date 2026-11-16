@@ -194,7 +194,7 @@ local function buffer_items(visual)
   local groups = {
     { label = 'LSP', items = function() return lsp_items(visual) end, enabled = has_lsp },
     { label = 'Debug', items = debug_items, enabled = function() return not visual and dap() ~= nil end },
-    { label = 'AI next edit', items = function() return require('hees.nes').menu_items(visual) end },
+    { label = 'AI', items = function() return require('hees.ai').menu_items(visual) end },
     { label = 'Git', items = function() return git_items(visual) end, enabled = has_git },
     { label = 'Search', items = function() return search_items(visual) end, enabled = has_telescope },
     sep,

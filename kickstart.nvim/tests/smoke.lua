@@ -21,7 +21,7 @@ end
 
 local function run()
   -- [[ Loading and keymaps ]]
-  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap', 'window-picker' } do
+  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.ai', 'hees.ai.analyze', 'hees.ai.viewer', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap', 'window-picker' } do
     check('module loaded: ' .. mod, package.loaded[mod] ~= nil)
   end
   local function has_map(mode, lhs) return vim.fn.maparg(lhs, mode) ~= '' end
@@ -85,7 +85,7 @@ local function run()
   local ctx = require 'hees.context'
   local top = ctx._buffer_items(false)
   local labels = vim.tbl_map(function(it) return it.label or '---' end, top)
-  check('buffer menu has LSP/Debug/AI/Git/Search groups', vim.tbl_contains(labels, 'LSP') and vim.tbl_contains(labels, 'Debug') and vim.tbl_contains(labels, 'AI next edit'), table.concat(labels, ', '))
+  check('buffer menu has LSP/Debug/AI/Git/Search groups', vim.tbl_contains(labels, 'LSP') and vim.tbl_contains(labels, 'Debug') and vim.tbl_contains(labels, 'AI'), table.concat(labels, ', '))
   check('buffer menu top level is short (<= 14 rows)', #top <= 14, #top)
   ctx.open_at_cursor(false)
   check('context menu opens from keyboard', menu.is_open())
@@ -237,11 +237,10 @@ local function run()
   -- Feed a fake CLI result through the same completion path a real request takes.
   local shown = nes._finish
   vim.api.nvim_win_set_cursor(0, { 1, 0 })
-  shown(vim.tbl_extend('force', req, { id = 1, backend = 'test', cwd = '.', argv = { 'test' }, prompt = 'p', started = vim.uv.hrtime() }), {
-    code = 0,
-    signal = 0,
-    stdout = '{"edits":[{"start_line":3,"end_line":2,"replacement":"  -- sum"},{"start_line":5,"end_line":5,"replacement":"print(total)"}]}',
-    stderr = '',
+  shown(vim.tbl_extend('force', req, { backend = 'test', started = vim.uv.hrtime() }), {
+    status = 'ok',
+    elapsed = 0,
+    text = '{"edits":[{"start_line":3,"end_line":2,"replacement":"  -- sum"},{"start_line":5,"end_line":5,"replacement":"print(total)"}]}',
   })
   check('suggestions shown', nes.has_suggestions())
   check('suggestion count', show_edits and #show_edits == 2)
@@ -261,22 +260,115 @@ local function run()
   -- Changed target lines are refused.
   req.lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   req.last, req.line_count = #req.lines, #req.lines
-  shown(vim.tbl_extend('force', req, { id = 2, backend = 'test', cwd = '.', argv = { 'test' }, prompt = 'p', started = vim.uv.hrtime() }), {
-    code = 0,
-    signal = 0,
-    stdout = '{"edits":[{"start_line":1,"end_line":1,"replacement":"local total = 2"}]}',
-    stderr = '',
+  shown(vim.tbl_extend('force', req, { backend = 'test', started = vim.uv.hrtime() }), {
+    status = 'ok',
+    elapsed = 0,
+    text = '{"edits":[{"start_line":1,"end_line":1,"replacement":"local total = 2"}]}',
   })
   vim.api.nvim_buf_set_text(buf, 0, 0, 0, 0, { '-- ' })
   check('editing the buffer dismisses suggestions', (function()
     vim.api.nvim_exec_autocmds('TextChanged', { buffer = buf })
     return not nes.has_suggestions()
   end)())
-  local logs = vim.fn.glob(vim.fs.joinpath(vim.env.HEES_NVIM_DATA, 'nes', 'logs', '*.log'), false, true)
-  check('requests logged to data dir', #logs == 1, vim.inspect(logs))
+
+  -- [[ AI runner, request log, viewer ]]
+  -- A stand-in "AI": Neovim running a script that echoes what it got on stdin.
+  local echo_script = vim.fn.tempname() .. '.lua'
+  vim.fn.writefile({ "local input = io.stdin:read('*a')", "io.stdout:write('ECHO ' .. #input .. ' bytes\\n' .. input:sub(1, 40))" }, echo_script)
+  local echo_argv = { vim.v.progpath, '-l', echo_script }
+  local ai_run, ai_log, viewer = require 'hees.ai.run', require 'hees.ai.log', require 'hees.ai.viewer'
+  local finished
+  local entry = ai_run.start({ kind = 'analyze', title = 'echo test', backend = 'test', prompt = 'hello prompt', argv = echo_argv }, function(e)
+    finished = e
+    e.outcome = 'echoed'
+  end)
+  check('ai run: entry is running while the command runs', entry and entry.status == 'running')
+  vim.wait(10000, function() return finished ~= nil end)
+  check('ai run: finishes with stdout and status ok', finished and finished.status == 'ok' and finished.text:find('ECHO 12 bytes', 1, true) ~= nil, finished and finished.text)
+  local day = ai_log.file_for(os.time())
+  local logged = vim.fn.filereadable(day) == 1 and vim.fn.readfile(day) or {}
+  local record = #logged > 0 and vim.json.decode(logged[#logged]) or {}
+  check('ai log: JSONL record has command, input, output, outcome', record.prompt == 'hello prompt' and record.argv and record.argv[1] == vim.v.progpath and record.stdout:find('ECHO', 1, true) and record.outcome == 'echoed', vim.inspect(record))
+  check('ai log: all() lists it newest first', ai_log.all(1)[1].uid == record.uid)
+  local detail = table.concat(viewer._detail_lines(record), '\n')
+  check('viewer: record shows command, stdin and reply', detail:find('## Command', 1, true) and detail:find('hello prompt', 1, true) and detail:find('ECHO 12 bytes', 1, true), detail)
+  viewer.open()
+  local v = viewer._view()
+  check('viewer: opens a tab with list and record', v and vim.api.nvim_get_current_tabpage() == v.tab and vim.api.nvim_buf_get_lines(v.list_buf, 1, 2, false)[1]:find('echo test', 1, true) ~= nil)
+  local before_count = #v.entries
+  local live_done
+  ai_run.start({ kind = 'nes', title = 'live entry', backend = 'test', prompt = 'x', argv = echo_argv }, function() live_done = true end)
+  vim.wait(300)
+  check('viewer: a started request appears at once', #viewer._view().entries == before_count + 1 and vim.api.nvim_buf_get_lines(v.list_buf, 1, 2, false)[1]:find('live entry', 1, true) ~= nil)
+  vim.wait(10000, function() return live_done end)
+  vim.wait(300)
+  check('viewer: it updates when the request finishes', vim.api.nvim_buf_get_lines(v.list_buf, 1, 2, false)[1]:find('✓', 1, true) ~= nil, vim.api.nvim_buf_get_lines(v.list_buf, 1, 2, false)[1])
+  vim.cmd 'tabclose'
+  check('viewer: closed with its tab', viewer._view() == nil or not vim.api.nvim_tabpage_is_valid(viewer._view().tab))
+
+  -- [[ Analysis with LSP context ]]
+  local lua_file = vim.fn.tempname() .. '.lua'
+  vim.fn.writefile({
+    'local M = {}',
+    '',
+    '--- Sum of two numbers.',
+    'local function add(a, b)',
+    '  return a + b',
+    'end',
+    '',
+    'function M.total(list)',
+    '  local sum = 0',
+    '  for _, n in ipairs(list) do',
+    '    sum = add(sum, n)',
+    '  end',
+    '  return sum',
+    'end',
+    '',
+    'return M',
+  }, lua_file)
+  vim.cmd('edit ' .. vim.fn.fnameescape(lua_file))
+  local lbuf = vim.api.nvim_get_current_buf()
+  vim.wait(20000, function() return #vim.lsp.get_clients { bufnr = lbuf, name = 'lua_ls' } > 0 end)
+  check('lsp: lua_ls attached to a Lua file', #vim.lsp.get_clients { bufnr = lbuf, name = 'lua_ls' } > 0)
+  -- lua_ls indexes the workspace first; wait until it answers document symbols.
+  vim.wait(120000, function()
+    local r = vim.lsp.buf_request_sync(lbuf, 'textDocument/documentSymbol', { textDocument = vim.lsp.util.make_text_document_params(lbuf) }, 2000) or {}
+    for _, resp in pairs(r) do
+      if resp.result and #resp.result > 0 then return true end
+    end
+    return false
+  end, 500)
+  vim.api.nvim_win_set_cursor(0, { 11, 12 }) -- on `add` inside M.total
+  local lctx = require('hees.ai.lsp_context').collect(lbuf, 0, 1, 16)
+  check('lsp context: server names', vim.tbl_contains(lctx.clients, 'lua_ls'), vim.inspect(lctx.clients))
+  check('lsp context: enclosing function found', lctx.enclosing and lctx.enclosing.first == 8 and lctx.enclosing.last == 14, vim.inspect(lctx.enclosing))
+  check('lsp context: definition of the symbol under the cursor', lctx.definition and lctx.definition.line == 4, vim.inspect(lctx.definition))
+  check('lsp context: hover text', #lctx.hover > 0, vim.inspect(lctx.hover))
+  check('lsp context: document outline', #lctx.outline >= 2, vim.inspect(lctx.outline))
+
+  local analyze = require 'hees.ai.analyze'
+  local real_build = require('hees.ai.backends').build
+  require('hees.ai.backends').build = function(_, _, p) return { argv = echo_argv, stdin = p } end
+  analyze.run 'review'
+  vim.wait(15000, function() return not analyze.is_busy() end)
+  require('hees.ai.backends').build = real_build
+  local last = ai_log.all(1)[1]
+  check('analyze: request logged as analyze with range of M.total', last.kind == 'analyze' and last.range and last.range[1] == 8 and last.range[2] == 14, vim.inspect(last.range))
+  check('analyze: prompt has task, code and LSP sections', last.prompt:find('Review this code', 1, true) and last.prompt:find('11|     sum = add(sum, n)', 1, true) and last.prompt:find('## LSP hover at the cursor', 1, true) and last.prompt:find('## Definition of the symbol under the cursor', 1, true) and last.prompt:find('Answer in Korean', 1, true), last.prompt)
+  local answer_buf
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w)):find('AI analysis', 1, true) then answer_buf = vim.api.nvim_win_get_buf(w) end
+  end
+  local answer_text = answer_buf and table.concat(vim.api.nvim_buf_get_lines(answer_buf, 0, -1, false), '\n') or ''
+  check('analyze: answer window shows the reply', answer_text:find('ECHO', 1, true) ~= nil and answer_text:find('# Review', 1, true) ~= nil, answer_text)
+  vim.cmd 'only'
+  local ai_items = require('hees.ai').menu_items(false)
+  local ai_labels = vim.tbl_map(function(it) return it.label or '---' end, ai_items)
+  check('AI menu has next edit, analysis, backend, models, log', vim.tbl_contains(ai_labels, 'Suggest next edit') and vim.tbl_contains(ai_labels, 'Explain function at cursor') and vim.tbl_contains(ai_labels, 'Request log') and #ai_items <= 15, table.concat(ai_labels, ' | '))
+  vim.api.nvim_set_current_buf(buf)
 
   -- [[ Backends ]]
-  local backends = require 'hees.nes.backends'
+  local backends = require 'hees.ai.backends'
   for _, name in ipairs(backends.names) do
     local inv, berr = backends.build(name, nil, 'prompt')
     if inv then

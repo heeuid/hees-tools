@@ -9,6 +9,7 @@
 #   lua/hees/menu.lua             마우스·키보드 겸용 다단계 메뉴
 #   lua/hees/context.lua          우클릭 메뉴 내용 (편집기 / 탐색기 / 버퍼 탭)
 #   lua/hees/nes/                 NES: Claude / Codex / Gemini CLI 로 다음 편집 제안
+#   lua/hees/ai/                  AI 공통: 백엔드·모델, 요청 실행·기록·뷰어, LSP 정보를 곁들인 코드 분석
 #
 #   install   파일 복사 + 필요한 플러그인(catppuccin, bufferline, statuscol, window-picker) 설치
 #   update    파일 다시 복사(이전 파일은 지움) + 그 플러그인들만 업데이트
@@ -28,7 +29,7 @@ PACK_PLUGINS=(catppuccin bufferline.nvim statuscol.nvim nvim-window-picker)
 OWNED=(plugin/hees.lua lua/hees lua/custom/plugins/hees.lua)
 EXCLUDED=("${OWNED[@]}" data/)
 
-usage() { sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 CMD=${1:-help}
 [ $# -gt 0 ] && shift

@@ -3,7 +3,7 @@
 [nvim-lua/kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim)을 그대로 설치하고, kickstart에 없는 기능만 플러그인으로 더합니다.
 
 - kickstart가 가진 기능은 kickstart 것을 씁니다: 탐색기(`kickstart.plugins.neo-tree`), 디버거(`kickstart.plugins.debug`), LSP/검색/git 키.
-- 더하는 것: 우클릭 메뉴, 클릭 가능한 버퍼 탭·거터, NES(Claude / Codex / Gemini), Catppuccin Latte 색상 테마.
+- 더하는 것: 우클릭 메뉴, 클릭 가능한 버퍼 탭·거터, AI(Claude / Codex / Gemini: 다음 편집 제안, LSP 정보를 곁들인 코드 분석, 요청 기록 뷰어), Catppuccin Latte 색상 테마.
 - LSP는 C/C++, Rust, Python, Lua, Markdown, TOML, JSON, YAML, Bash가 켜집니다(kickstart의 서버 목록을 켜는 방식).
 - 설치가 끝나면 그냥 `nvim`으로 실행합니다. 설정은 Neovim 기본 경로에, 실행 파일은 PATH 맨 앞에 들어갑니다.
 - 기존 설정(예: LazyVim)은 덮어쓰지 않고 `*.bak-<시각>`으로 옮겨 둡니다. 다른 곳에 설치된 Neovim 파일은 건드리지 않습니다.
@@ -171,7 +171,7 @@ kickstart의 `git status`에 나타나지 않습니다.
   ─────────                      Go to        ▸   Toggle breakpoint Space b
   LSP            ▸               Symbols      ▸   Breakpoints    ▸
   Debug          ▸               Diagnostics  ▸   ─────
-  AI next edit   ▸               ─────            Toggle debug UI  F7
+  AI             ▸               ─────            Toggle debug UI  F7
   Git            ▸               Inlay hints      Toggle REPL
   Search         ▸               Restart LSP
   ─────────                      LSP health
@@ -192,35 +192,68 @@ kickstart의 `git status`에 나타나지 않습니다.
 창이 하나뿐이면 옮기기·크기 맞추기·닫기 항목은 흐리게 표시됩니다. 파일을 분할로 여는 것은 탐색기 우클릭
 (**Open in ▸**)과 버퍼 탭 우클릭 메뉴에 있습니다.
 
-## NES (Next Edit Suggestion)
+## AI (Claude / Codex / Gemini)
 
-최근 편집(diff)과 커서 주변 코드를 Claude, Codex, Gemini CLI 중 하나에 보내 다음 편집을 제안받습니다.
-제안은 화면에 diff로 표시되고(지울 줄은 빨강, 넣을 줄은 초록), 고르기 전까지 파일은 바뀌지 않습니다.
+설치된 AI CLI 하나를 골라(GPT는 `codex`) 두 가지에 씁니다. 모든 요청은 무엇을 실행했고 무엇을 주고받았는지 그대로 기록되고, 요청 기록 창에서 볼 수 있습니다.
+우클릭 메뉴의 **AI ▸**에 모두 있습니다.
 
-| 키 | 메뉴 (AI next edit ▸) | 하는 일 |
+### 다음 편집 제안 (NES)
+
+최근 편집(diff)과 커서 주변 코드를 보내 다음 편집을 제안받습니다. 제안은 화면에 diff로 표시되고(지울 줄은 빨강, 넣을 줄은 초록), 고르기 전까지 파일은 바뀌지 않습니다.
+
+| 키 | 메뉴 (AI ▸) | 하는 일 |
 |---|---|---|
 | `<Space>an` | Suggest next edit | 제안 요청 (비주얼 모드: 선택 영역 기준) |
 | `<Space>aa` | Jump to / apply suggestion | 제안 위치로 이동, 이미 그 위치면 적용 |
 | `<Space>ad` | Dismiss suggestions | 제안 지우기 |
-| `<Space>ac` | Cancel running request | 요청 취소 |
-| `<Space>ab` | Backend ▸ | claude / codex / gemini 선택 (설치 안 된 것은 흐리게) |
-| `<Space>am` | Model… | 백엔드별 모델 (비우면 기본값: claude는 `haiku`, 나머지는 CLI 기본) |
-| `<Space>at` | Auto suggest | 편집 후 잠시 멈추면 자동 요청 (기본 꺼짐) |
-| `<Space>al` | Open request log | 요청 기록 열기 |
-
-`:Nes request|accept|accept_all|dismiss|cancel|backend [이름]|model [이름]|auto [on|off]|log|status`로도 쓸 수 있습니다.
+| `<Space>at` | Auto next-edit suggest | 편집 후 잠시 멈추면 자동 요청 (기본 꺼짐) |
 
 - 요청 중에는 커서 줄 끝에 백엔드·모델·경과 시간이 돌아가며 표시됩니다.
-- 모든 요청은 실행한 명령, 보낸 프롬프트, 받은 출력, 종료 코드, 걸린 시간 그대로
-  `<설정 폴더>/data/nes/logs/<날짜>.log`에 남습니다 (`<Space>al`). 백엔드·모델·자동 실행 설정은 `data/nes/state.json`.
-  위치는 `HEES_NVIM_DATA`로 바꿀 수 있습니다.
-- CLI는 도구를 끄고 읽기 전용으로 실행해 파일을 건드리지 않습니다.
+- 적용 직전에 대상 줄이 그사이 바뀌었으면 적용하지 않고 알려 줍니다. 버퍼를 고치면 제안은 사라집니다.
+
+### 코드 분석 (LSP 정보와 함께)
+
+| 키 | 메뉴 (AI ▸) | 하는 일 |
+|---|---|---|
+| `<Space>ax` | Explain … | 코드가 무엇을 하고 어떻게 동작하는지 설명 |
+| `<Space>ar` | Review … for bugs | 버그, 놓친 경우, 오류 처리, 위험한 패턴을 줄 번호와 고칠 방법으로 |
+| `<Space>aq` | Ask about …… | 질문을 입력해 물어보기 |
+| `<Space>ac` | Cancel running request | 진행 중인 요청(NES 포함) 취소 |
+
+- **대상**: 비주얼 모드면 선택 영역, 아니면 LSP 문서 심볼로 찾은 **커서가 있는 함수(없으면 클래스)**, 그것도 없으면 커서 주변 ±30줄.
+- **함께 보내는 LSP 정보**: 붙어 있는 서버, 그 범위의 진단(오류·경고), 커서 위치의 hover(타입·문서), 커서 아래 심볼의 정의 위치와 그 소스,
+  참조 위치, 파일의 심볼 개요. 각 요청은 1.5초 안에 답이 없으면 빼고 보냅니다.
+- **답**: 오른쪽 Markdown 창에 표시됩니다(`q`로 닫기). 기본으로 한국어로 답하게 합니다.
+- `:Ai explain` / `:Ai review` / `:Ai ask 질문` (범위를 주면 `:10,30Ai review`처럼 그 줄들).
+
+### 백엔드와 모델
+
+| 키 | 메뉴 (AI ▸) | 하는 일 |
+|---|---|---|
+| `<Space>ab` | Backend ▸ | claude / codex / gemini 선택 (설치 안 된 것은 흐리게). 다음 편집과 분석이 함께 씀 |
+| `<Space>am` | Models ▸ Next edit… | 다음 편집용 모델 (비우면 기본: claude는 `haiku`, 나머지는 CLI 기본) |
+| — | Models ▸ Analysis… | 분석용 모델 (비우면 CLI 기본). `:Ai model analyze <이름>` |
+
+모델은 백엔드마다 따로 저장됩니다. 설정은 `<설정 폴더>/data/ai/state.json` (`:Ai status`로 확인).
+
+### 요청 기록 (`<Space>al`, AI ▸ Request log)
+
+새 탭에 왼쪽은 요청 목록(최근 것부터, 7일), 오른쪽은 고른 요청의 전체 기록이 나옵니다.
+
+- **목록**: 상태(`…` 실행 중, `✓` 성공, `✗` 실패), 시각, 종류(nes/analyze), 백엔드/모델, 걸린 시간, 제목. 실행 중인 요청도 바로 나타나고 끝나면 갱신됩니다.
+- **기록**: 실행한 **명령**, 작업 폴더, stdin으로 보낸 **입력(프롬프트) 전체**, 받은 **출력(답) 전체**, stderr, 종료 코드, 결과(예: `2 edits shown`, `parse error …`).
+- 키: `j`/`k`나 클릭으로 이동하면 오른쪽이 바뀜, `<CR>`/`l` 기록으로, `h` 목록으로, `y` 명령 복사, `Y` 답 복사, `o` 원본 파일 열기, `r` 새로고침, `q` 닫기.
+- 원본: `<설정 폴더>/data/ai/logs/<날짜>.jsonl` — 요청 하나가 한 줄(JSON)이고, 위 내용을 가공하지 않고 그대로 남깁니다. 위치는 `HEES_NVIM_DATA`로 바꿀 수 있습니다.
+
+### 실행 방식
+
+- CLI는 도구를 끄고 읽기 전용으로 실행해 파일을 건드리지 않습니다. 프롬프트는 stdin으로 보냅니다.
   - claude: `claude -p --output-format text --tools "" --no-session-persistence --model <모델>`
   - codex: `codex exec --skip-git-repo-check --ephemeral -s read-only --color never -o <파일> -`
-  - gemini: `gemini -p … -o text --approval-mode plan`
-- 적용 직전에 대상 줄이 그사이 바뀌었으면 적용하지 않고 알려 줍니다. 버퍼를 고치면 제안은 사라집니다.
+  - gemini: `gemini -p <짧은 지시> -o text --approval-mode plan`
 - CLI가 로그인되어 있지 않으면 바로 멈추고 알려 줍니다. 터미널에서 `claude` / `codex` / `gemini`를 한 번 실행해 로그인하세요.
 - Windows의 npm 래퍼(`claude.cmd`, `gemini.cmd`)는 `cmd /c` 인용 문제를 피하려고 래퍼가 가리키는 프로그램을 직접 실행합니다.
+- `:Nes …` 명령(request, accept, dismiss, …)도 그대로 씁니다.
 
 ## 추가되는 키
 
@@ -230,15 +263,15 @@ kickstart 키와 Neovim 기본 키는 바꾸지 않습니다. 이 설정이 새�
 |---|---|---|
 | 오른쪽 클릭 | 노멀/비주얼/입력 | 컨텍스트 메뉴 (기본 PopUp 메뉴 대신) |
 | `<Space>m`, `Shift+F10` | 노멀/비주얼 | 컨텍스트 메뉴 |
-| `<Space>a…` | 노멀/비주얼 | NES (위 표) |
+| `<Space>a…` | 노멀/비주얼 | AI: 다음 편집, 분석, 백엔드/모델, 요청 기록 (위 표) |
 
 kickstart의 키는 그대로입니다: 탐색기 `\`, 디버그 `F5` `F1` `F2` `F3` `F7` `<Space>b` `<Space>B`, LSP `grd` `grr` `gri` `grt` `grD` `grn` `gra` `gO` `gW`, 검색 `<Space>s…`, git `<Space>h…`.
 
 ## 테스트
 
 ```powershell
-nvim --headless -c "luafile tests/smoke.lua"      # 메뉴, 컨텍스트 메뉴, NES 파싱/표시/적용, 백엔드 명령 (CLI 호출 없음)
-nvim --headless -c "luafile tests/nes-live.lua"   # 실제 CLI로 NES 한 번씩 (HEES_LIVE_BACKENDS=claude,codex 로 고르기)
+nvim --headless -c "luafile tests/smoke.lua"      # 메뉴, 탐색기, NES, AI 실행·기록·뷰어, LSP 정보 수집, 분석 (실제 AI 호출 없음)
+nvim --headless -c "luafile tests/nes-live.lua"   # 실제 CLI로 다음 편집과 분석을 한 번씩 (HEES_LIVE_BACKENDS=claude,codex 로 고르기)
 ```
 
 ## 파일
@@ -253,7 +286,7 @@ kickstart.nvim/
 ├─ bin/nvk.cmd  bin/nvk           (선택) -AppName 으로 나란히 설치했을 때의 실행기
 ├─ overlay/                       kickstart 설정에 복사되는 플러그인
 │  ├─ plugin/hees.lua             진입점 (init.lua 다음에 자동 로드)
-│  └─ lua/hees/ (colors, ui, window_picker, explorer, menu, context, util, nes/)
+│  └─ lua/hees/ (colors, ui, window_picker, explorer, menu, context, util, nes/, ai/)
 ├─ logs/                          (git 제외) 스크립트 출력 기록
 ├─ tools/
 │  ├─ patch-kickstart.lua         kickstart 자체 기능 켜기 (두 OS 공통, nvim -l 로 실행)

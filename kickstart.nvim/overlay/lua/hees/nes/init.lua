@@ -3,10 +3,11 @@
 -- Recent edits (as diffs) and the code around the cursor go to the selected CLI, which answers
 -- with JSON line-range replacements. Suggestions are shown inline as a diff; <leader>aa jumps to
 -- the next one and, when the cursor is already on it, applies it (no Neovim default key is remapped).
--- Every request is logged verbatim (`:Nes log`) and shown while it runs.
+-- Requests go through hees.ai.run, so each one is shown while it runs and logged verbatim
+-- (request log viewer: <leader>al). Backend and model come from hees.ai.settings.
 
-local backends = require 'hees.nes.backends'
-local log = require 'hees.nes.log'
+local run = require 'hees.ai.run'
+local settings = require 'hees.ai.settings'
 local util = require 'hees.util'
 
 local M = {}
@@ -24,26 +25,6 @@ local ns_anchor = vim.api.nvim_create_namespace 'hees.nes.anchor'
 local ns_view = vim.api.nvim_create_namespace 'hees.nes.view'
 local ns_busy = vim.api.nvim_create_namespace 'hees.nes.busy'
 local group = vim.api.nvim_create_augroup('hees-nes', { clear = true })
-
--- [[ Persistent settings ]]
-
-local settings
-local function state_path() return vim.fs.joinpath(util.data_dir 'nes', 'state.json') end
-
-local function load_settings()
-  settings = util.read_json(state_path(), { backend = 'claude', models = vim.empty_dict(), auto = false })
-  if not vim.tbl_contains(backends.names, settings.backend) then settings.backend = 'claude' end
-end
-
-local function save_settings() util.write_json(state_path(), settings) end
-
-function M.settings() return settings end
-
-local function model_for(backend)
-  local m = settings.models[backend]
-  if m == nil or m == '' then return backends.default_models[backend] end
-  return m
-end
 
 -- [[ Recent edit tracking ]]
 
@@ -297,7 +278,6 @@ end
 -- [[ Requests ]]
 
 local busy ---@type table?
-local request_id = 0
 
 local function stop_spinner(req)
   if req.timer then
@@ -333,60 +313,28 @@ function M.cancel()
   busy = nil
   req.cancelled = true
   stop_spinner(req)
-  pcall(function() req.handle:kill 'sigterm' end)
+  if req.entry and req.entry.cancel then req.entry.cancel() end
   vim.notify 'NES: request cancelled'
 end
 
-local function finish(req, res)
-  local cancelled = req.cancelled
-  if not cancelled then
+--- Handle a finished request (`entry` from hees.ai.run): parse, show, and set entry.outcome.
+local function finish(req, entry)
+  local cancelled = req.cancelled or entry.status == 'cancelled'
+  if not req.cancelled then
     if busy == req then busy = nil end
     stop_spinner(req)
   end
-  local elapsed = (vim.uv.hrtime() - req.started) / 1e9
-  local answer
-  if req.output_file then
-    local f = io.open(req.output_file, 'r')
-    if f then
-      answer = f:read '*a'
-      f:close()
-    end
-    os.remove(req.output_file)
-  end
-  local entry = {
-    id = req.id,
-    backend = req.backend,
-    model = req.model,
-    cwd = req.cwd,
-    argv = req.argv,
-    prompt = req.prompt,
-    stdout = res.stdout,
-    stderr = res.stderr,
-    answer = answer,
-    code = res.code,
-    elapsed = elapsed,
-  }
   local function done(outcome, msg, level)
     entry.outcome = outcome
-    log.write(entry)
-    if msg then vim.notify(('NES · %s: %s (%.1fs)'):format(req.backend, msg, elapsed), level) end
+    if msg then vim.notify(('NES · %s: %s (%.1fs)'):format(req.backend, msg, entry.elapsed or 0), level) end
   end
 
   if cancelled then return done 'cancelled' end
-  if req.login_prompt then
-    return done(
-      'login required',
-      ('the %s CLI is not signed in — run `%s` once in a terminal and log in'):format(req.backend, req.backend),
-      vim.log.levels.ERROR
-    )
+  if entry.status ~= 'ok' then
+    return done(entry.status, (entry.reason or entry.status) .. ' — see the request log (' .. util.key_hint '<leader>al' .. ')', vim.log.levels.ERROR)
   end
-  if res.code ~= 0 then
-    local reason = res.signal ~= 0 and ('stopped (signal %d, timeout %ds?)'):format(res.signal, M.config.timeout_ms / 1000)
-      or ('exit %d: %s'):format(res.code, vim.trim(res.stderr or ''):match '[^\n]*$' or '')
-    return done('error', reason .. ' — see :Nes log', vim.log.levels.ERROR)
-  end
-  local edits, err, reason = M.parse(answer or res.stdout or '', req)
-  if not edits then return done('parse error: ' .. err, err .. ' — see :Nes log', vim.log.levels.WARN) end
+  local edits, err, reason = M.parse(entry.text or '', req)
+  if not edits then return done('parse error: ' .. err, err .. ' — see the request log', vim.log.levels.WARN) end
   if vim.api.nvim_get_current_buf() ~= req.buf then return done(('%d edits, buffer left'):format(#edits)) end
   local shown = show(req, edits)
   if shown == 0 then return done('no edits', not req.auto and 'no suggestion' or nil) end
@@ -414,9 +362,8 @@ function M.request(opts)
   end
   local first = math.max(1, lo - M.config.context_lines)
   local last = math.min(n, hi + M.config.context_lines)
-  local backend = settings.backend
+  local backend = settings.backend()
   local req = {
-    id = 0,
     buf = buf,
     auto = opts.auto,
     range = opts.range and { lo, hi } or nil,
@@ -428,109 +375,31 @@ function M.request(opts)
     path = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':~:.'),
     filetype = vim.bo[buf].filetype,
     backend = backend,
-    model = model_for(backend),
-    cwd = vim.fn.getcwd(),
+    model = settings.model('nes', backend),
+    started = vim.uv.hrtime(),
   }
-  req.prompt = build_prompt(req)
-  local inv, err = backends.build(backend, req.model, req.prompt)
-  if not inv then return vim.notify('NES: ' .. err, vim.log.levels.ERROR) end
-  request_id = request_id + 1
-  req.id = request_id
-  req.argv = inv.argv
-  req.output_file = inv.output_file
-  req.started = vim.uv.hrtime()
-
-  -- Output is collected while it streams so an interactive login prompt (CLI not signed in) stops
-  -- the request at once instead of waiting for the timeout.
-  req.stdout, req.stderr = {}, {}
-  local function collect(chunks)
-    return function(_, data)
-      if not data then return end
-      table.insert(chunks, data)
-      if not req.login_prompt and data:find(backends.login_prompt_pattern) then
-        req.login_prompt = true
-        vim.schedule(function() pcall(function() req.handle:kill 'sigterm' end) end)
-      end
-    end
-  end
-  local ok, handle = pcall(vim.system, inv.argv, {
-    stdin = inv.stdin,
-    text = true,
-    cwd = req.cwd,
-    timeout = M.config.timeout_ms,
-    stdout = collect(req.stdout),
-    stderr = collect(req.stderr),
-  }, function(res)
-    res.stdout, res.stderr = table.concat(req.stdout), table.concat(req.stderr)
-    vim.schedule(function() finish(req, res) end)
-  end)
-  if not ok then
-    log.write(vim.tbl_extend('force', req, { code = -1, stderr = tostring(handle), outcome = 'spawn failed' }))
-    return vim.notify('NES: failed to start ' .. backend .. ': ' .. tostring(handle), vim.log.levels.ERROR)
-  end
-  req.handle = handle
+  local entry, err = run.start({
+    kind = 'nes',
+    title = ('Next edit %s:%d%s'):format(req.path, cursor[1], opts.auto and ' (auto)' or ''),
+    backend = backend,
+    model = req.model,
+    prompt = build_prompt(req),
+    instruction = 'Answer with the JSON object only.',
+    timeout_ms = M.config.timeout_ms,
+    meta = { file = req.path, range = { first, last } },
+  }, function(e) finish(req, e) end)
+  if not entry then return vim.notify('NES: ' .. err, vim.log.levels.ERROR) end
+  if entry.status ~= 'running' then return end -- failed to start; already reported in the entry
+  req.entry = entry
   busy = req
   start_spinner(req)
 end
 
--- [[ Settings commands ]]
-
-function M.set_backend(name)
-  if not vim.tbl_contains(backends.names, name) then return vim.notify('NES: unknown backend ' .. tostring(name), vim.log.levels.ERROR) end
-  if not backends.available(name) then vim.notify('NES: ' .. name .. ' CLI is not on PATH', vim.log.levels.WARN) end
-  settings.backend = name
-  save_settings()
-  vim.notify(('NES: backend = %s (model: %s)'):format(name, model_for(name) or 'CLI default'))
-end
-
-function M.select_backend()
-  vim.ui.select(backends.names, {
-    prompt = 'NES backend',
-    format_item = function(name)
-      local mark = name == settings.backend and '● ' or '  '
-      return mark .. name .. (backends.available(name) and '' or '  (not installed)')
-    end,
-  }, function(choice)
-    if choice then M.set_backend(choice) end
-  end)
-end
-
---- Set the model for the current backend; empty means the default.
----@param model string?
-function M.set_model(model)
-  local backend = settings.backend
-  if model == nil then
-    return vim.ui.input({ prompt = ('Model for %s (empty = %s): '):format(backend, backends.default_models[backend] or 'CLI default'), default = settings.models[backend] or '' }, function(input)
-      if input ~= nil then M.set_model(input) end
-    end)
-  end
-  settings.models[backend] = model ~= '' and model or nil
-  save_settings()
-  vim.notify(('NES: %s model = %s'):format(backend, model_for(backend) or 'CLI default'))
-end
-
-function M.set_auto(on)
-  if on == nil then on = not settings.auto end
-  settings.auto = on
-  save_settings()
-  vim.notify('NES: auto suggest ' .. (on and 'on' or 'off'))
-end
-
 -- [[ Menu ]]
 
+--- Next-edit items of the AI submenu (hees.ai adds analysis, backend, models and the log).
 function M.menu_items(visual)
   local has = function() return active ~= nil and active.buf == vim.api.nvim_get_current_buf() end
-  local backend_items = {}
-  for _, name in ipairs(backends.names) do
-    local available = backends.available(name)
-    table.insert(backend_items, {
-      label = name .. (available and '' or '  (not installed)'),
-      checked = name == settings.backend,
-      enabled = available,
-      action = function() M.set_backend(name) end,
-    })
-  end
-  local model = model_for(settings.backend)
   return {
     visual and {
       label = 'Suggest edit for selection',
@@ -543,12 +412,6 @@ function M.menu_items(visual)
     { label = 'Jump to / apply suggestion', hint = '<leader>aa', action = function() M.accept() end, enabled = has },
     { label = 'Apply all suggestions', action = M.accept_all, enabled = has },
     { label = 'Dismiss suggestions', hint = '<leader>ad', action = M.dismiss, enabled = has },
-    { label = 'Cancel running request', action = M.cancel, enabled = busy ~= nil },
-    { sep = true },
-    { label = 'Backend: ' .. settings.backend, items = backend_items },
-    { label = 'Model: ' .. (model or 'CLI default') .. '…', hint = '<leader>am', action = function() M.set_model() end },
-    { label = 'Auto suggest', hint = '<leader>at', checked = settings.auto, action = function() M.set_auto() end },
-    { label = 'Open request log', hint = '<leader>al', action = log.open },
   }
 end
 
@@ -557,7 +420,7 @@ end
 local auto_timer
 
 local function schedule_auto(buf)
-  if not settings.auto or busy or active then return end
+  if not settings.auto() or busy or active then return end
   auto_timer = auto_timer or vim.uv.new_timer()
   auto_timer:stop()
   auto_timer:start(
@@ -576,33 +439,29 @@ local subcommands = {
   dismiss = M.dismiss,
   cancel = M.cancel,
   backend = function(arg)
-    if arg then return M.set_backend(arg) end
-    M.select_backend()
+    if arg then return settings.set_backend(arg) end
+    settings.select_backend()
   end,
-  model = function(arg) M.set_model(arg) end,
+  model = function(arg) settings.set_model('nes', arg) end,
   auto = function(arg)
-    if arg == 'on' then return M.set_auto(true) end
-    if arg == 'off' then return M.set_auto(false) end
-    M.set_auto()
+    if arg == 'on' then return settings.set_auto(true) end
+    if arg == 'off' then return settings.set_auto(false) end
+    settings.set_auto()
   end,
-  log = log.open,
+  log = function() require('hees.ai.viewer').open() end,
   status = function()
-    vim.notify(
-      ('NES: backend=%s model=%s auto=%s busy=%s suggestions=%d\nlog: %s'):format(
-        settings.backend,
-        model_for(settings.backend) or 'CLI default',
-        tostring(settings.auto),
-        tostring(busy ~= nil),
-        active and #active.edits or 0,
-        log.today()
-      )
-    )
+    vim.notify(('NES: backend=%s model=%s auto=%s busy=%s suggestions=%d'):format(
+      settings.backend(),
+      settings.model 'nes' or 'CLI default',
+      tostring(settings.auto()),
+      tostring(busy ~= nil),
+      active and #active.edits or 0
+    ))
   end,
 }
 
 function M.setup(opts)
   M.config = vim.tbl_deep_extend('force', M.config, opts or {})
-  load_settings()
 
   vim.api.nvim_create_autocmd({ 'BufReadPost', 'BufEnter' }, {
     group = group,
@@ -638,12 +497,13 @@ function M.setup(opts)
     complete = function(_, line)
       local args = vim.split(line, '%s+')
       if #args <= 2 then return vim.tbl_keys(subcommands) end
-      if args[2] == 'backend' then return backends.names end
+      if args[2] == 'backend' then return require('hees.ai.backends').names end
       if args[2] == 'auto' then return { 'on', 'off' } end
       return {}
     end,
   })
 
+  -- Backend, models, auto, cancel and the request log are bound by hees.ai.
   local map = vim.keymap.set
   map('n', '<leader>an', function() M.request() end, { desc = 'AI: suggest [N]ext edit' })
   map('x', '<leader>an', function()
@@ -652,13 +512,6 @@ function M.setup(opts)
   end, { desc = 'AI: suggest edit for selection' })
   map('n', '<leader>aa', function() M.accept() end, { desc = 'AI: jump to / [A]pply suggestion' })
   map('n', '<leader>ad', M.dismiss, { desc = 'AI: [D]ismiss suggestions' })
-  map('n', '<leader>ac', M.cancel, { desc = 'AI: [C]ancel request' })
-  map('n', '<leader>ab', M.select_backend, { desc = 'AI: choose [B]ackend' })
-  map('n', '<leader>am', function() M.set_model() end, { desc = 'AI: set [M]odel' })
-  map('n', '<leader>at', function() M.set_auto() end, { desc = 'AI: [T]oggle auto suggest' })
-  map('n', '<leader>al', log.open, { desc = 'AI: open request [L]og' })
-  local has_wk, wk = pcall(require, 'which-key')
-  if has_wk then wk.add { { '<leader>a', group = '[A]I next edit', mode = { 'n', 'x' } } } end
 end
 
 -- Exposed for tests.

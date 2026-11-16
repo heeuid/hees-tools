@@ -1,5 +1,5 @@
 -- How to run each AI CLI non-interactively with the prompt on stdin, with tools disabled
--- and nothing persisted, so a suggestion request can't touch the workspace.
+-- and nothing persisted, so a request can't touch the workspace.
 
 local util = require 'hees.util'
 
@@ -7,9 +7,9 @@ local M = {}
 
 M.names = { 'claude', 'codex', 'gemini' }
 
---- Model used when none is set with `:Nes model`. NES has to be fast, so Claude defaults to
---- its small model; the others use their CLI default.
-M.default_models = { claude = 'haiku' }
+--- Model used per kind of request when none is set. Next-edit suggestions have to be fast, so
+--- Claude defaults to its small model there; everything else uses the CLI's default model.
+M.default_models = { nes = { claude = 'haiku' }, analyze = {} }
 
 --- Output that means the CLI is waiting for an interactive sign-in (seen from gemini when logged out).
 M.login_prompt_pattern = '[Aa]uthentication page'
@@ -58,7 +58,7 @@ end
 
 function M.available(name) return M.resolve(name) ~= nil end
 
----@class hees.nes.Invocation
+---@class hees.ai.Invocation
 ---@field argv string[]
 ---@field stdin string
 ---@field output_file string? where the answer is written instead of stdout
@@ -67,8 +67,9 @@ function M.available(name) return M.resolve(name) ~= nil end
 ---@param name string backend name
 ---@param model string? model override
 ---@param prompt string full prompt
----@return hees.nes.Invocation? invocation, string? error
-function M.build(name, model, prompt)
+---@param instruction string? short closing instruction (gemini puts stdin before its -p text)
+---@return hees.ai.Invocation? invocation, string? error
+function M.build(name, model, prompt, instruction)
   local prefix = M.resolve(name)
   if not prefix then return nil, name .. ' CLI not found on PATH' end
   local argv = vim.deepcopy(prefix)
@@ -83,7 +84,7 @@ function M.build(name, model, prompt)
     table.insert(argv, '-')
   elseif name == 'gemini' then
     -- Gemini puts stdin in front of the -p text, so the instructions go on stdin and -p only asks for the answer.
-    vim.list_extend(argv, { '-p', 'Answer with the JSON object only.', '-o', 'text', '--approval-mode', 'plan' })
+    vim.list_extend(argv, { '-p', instruction or 'Answer the request above.', '-o', 'text', '--approval-mode', 'plan' })
     if model then vim.list_extend(argv, { '-m', model }) end
   else
     return nil, 'unknown backend: ' .. name
