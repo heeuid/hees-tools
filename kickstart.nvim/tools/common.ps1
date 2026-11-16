@@ -125,11 +125,26 @@ function Add-UserPathEntry([string]$Dir) {
 # highlighting. Install it when missing: the official release exe into
 # %LOCALAPPDATA%\Programs\tree-sitter (added to the user PATH), else `cargo install`. Returns $false
 # if neither worked.
+#
+# nvim-treesitter needs tree-sitter-cli 0.26.1 or newer (TREE_SITTER_MIN_VER in its health check);
+# older ones fail with "The subcommand 'build' wasn't recognized", so they are replaced too.
+$script:TreeSitterMin = [version]'0.26.1'
+
+function Get-TreeSitterVersion([string]$Exe) {
+  $line = & $Exe --version 2>$null | Select-Object -First 1
+  if ($line -match '(\d+\.\d+\.\d+)') { return [version]$Matches[1] }
+  return $null
+}
+
 function Install-TreeSitter([string]$Tag) {
   $found = Get-Command tree-sitter -ErrorAction SilentlyContinue
   if ($found) {
-    Say $Tag "tree-sitter CLI: $($found.Source) ($((& $found.Source --version | Select-Object -First 1)))"
-    return $true
+    $ver = Get-TreeSitterVersion $found.Source
+    if ($ver -and $ver -ge $script:TreeSitterMin) {
+      Say $Tag "tree-sitter CLI: $($found.Source) ($ver)"
+      return $true
+    }
+    Warn $Tag "tree-sitter CLI 가 너무 오래됐습니다: $($found.Source) ($ver), $($script:TreeSitterMin) 이상이 필요합니다. 새 버전을 설치합니다."
   }
   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
   $dir = Join-Path $env:LOCALAPPDATA 'Programs\tree-sitter'
@@ -150,10 +165,14 @@ function Install-TreeSitter([string]$Tag) {
       $in.Dispose()
     }
     Remove-Item -LiteralPath $gz
-    $version = & $exe --version | Select-Object -First 1
-    if ($LASTEXITCODE -ne 0) { throw "$exe 실행 실패" }
+    $version = Get-TreeSitterVersion $exe
+    if (-not $version -or $version -lt $script:TreeSitterMin) { throw "$exe 실행 실패 또는 버전 $version" }
     Add-UserPathEntry $dir
-    Say $Tag "tree-sitter CLI: $version (사용자 PATH 에 $dir 추가)"
+    Say $Tag "tree-sitter CLI: $exe ($version, 사용자 PATH 에 $dir 추가)"
+    # The machine PATH is searched before the user PATH: an old one there would still win.
+    if ($found -and -not ($found.Source -like "$dir*")) {
+      Warn $Tag "오래된 $($found.Source) 가 PATH 에서 먼저 잡힐 수 있습니다. 그 프로그램을 지우거나 PATH 에서 빼세요."
+    }
     return $true
   } catch {
     Warn $Tag "공식 실행 파일을 설치하지 못했습니다: $_"
@@ -161,7 +180,8 @@ function Install-TreeSitter([string]$Tag) {
   if (Get-Command cargo -ErrorAction SilentlyContinue) {
     Say $Tag 'tree-sitter CLI 설치: cargo install --locked tree-sitter-cli (소스 빌드, 몇 분 걸립니다)'
     & cargo install --locked tree-sitter-cli | Out-Host
-    if ($LASTEXITCODE -eq 0) { return $true }
+    $cargoExe = Join-Path $env:USERPROFILE '.cargo\bin\tree-sitter.exe'
+    if ($LASTEXITCODE -eq 0 -and (Get-TreeSitterVersion $cargoExe) -ge $script:TreeSitterMin) { return $true }
   }
   Warn $Tag 'tree-sitter CLI 를 설치하지 못했습니다. 이대로면 문법 색칠(treesitter 파서)이 동작하지 않습니다.'
   Warn $Tag 'winget install --id tree-sitter.tree-sitter-cli 로 설치한 뒤 이 스크립트를 다시 실행하세요.'

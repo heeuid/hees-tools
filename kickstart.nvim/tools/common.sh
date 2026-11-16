@@ -46,13 +46,44 @@ check_user_path() { # dir
   esac
 }
 
-# nvim-treesitter (kickstart) compiles parsers with the tree-sitter CLI, so without it there is no
-# syntax highlighting. Install it when missing: the official release binary into ~/.local/bin if it
-# runs here (it needs a recent glibc), otherwise `cargo install`. Returns 1 if neither worked.
+# nvim-treesitter (kickstart) compiles parsers with `tree-sitter build`; it needs tree-sitter-cli
+# 0.26.1 or newer (TREE_SITTER_MIN_VER in its health check). Older ones (apt, old npm) fail with
+# "The subcommand 'build' wasn't recognized".
+TS_MIN=0.26.1
+
+ts_version() { "$1" --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1; } # exe
+ts_new_enough() { # exe
+  local v
+  v=$(ts_version "$1")
+  [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$TS_MIN" "$v" | sort -V | head -n1)" = "$TS_MIN" ]
+}
+
+# After installing a new tree-sitter, make sure the user's own shell will pick it, not an old one.
+check_user_tree_sitter() { # installed exe
+  local first
+  first=$(PATH=$USER_PATH command -v tree-sitter 2>/dev/null || true)
+  if [ -z "$first" ]; then
+    check_user_path "$(dirname "$1")"
+  elif [ "$first" != "$1" ] && ! ts_new_enough "$first"; then
+    warn "셸에서는 오래된 $first ($(ts_version "$first")) 가 먼저 잡힙니다. Neovim 이 그걸 쓰면 파서 설치가 실패합니다."
+    warn "  지우기: sudo apt remove tree-sitter-cli  또는  npm uninstall -g tree-sitter-cli  (설치한 방법에 맞게)"
+    warn "  또는 셸 설정에서 $(dirname "$1") 를 PATH 맨 앞에: export PATH=\"$(dirname "$1"):\$PATH\""
+  fi
+}
+
+# Install the tree-sitter CLI when it is missing or older than $TS_MIN: the official release binary
+# into ~/.local/bin if it runs here (it needs a recent glibc), otherwise `cargo install`.
+# Returns 1 if neither worked.
 ensure_tree_sitter() {
   if have tree-sitter; then
-    say "tree-sitter CLI: $(command -v tree-sitter) ($(tree-sitter --version 2>/dev/null | head -n1))"
-    return 0
+    local found
+    found=$(command -v tree-sitter)
+    if ts_new_enough "$found"; then
+      say "tree-sitter CLI: $found ($(ts_version "$found"))"
+      check_user_tree_sitter "$found"
+      return 0
+    fi
+    warn "tree-sitter CLI 가 너무 오래됐습니다: $found ($(ts_version "$found" || true)), $TS_MIN 이상이 필요합니다. 새 버전을 설치합니다."
   fi
   local asset= dest=$HOME/.local/bin tmp
   case "$(uname -s)/$(uname -m)" in
@@ -66,10 +97,10 @@ ensure_tree_sitter() {
     mkdir -p "$dest"
     tmp=$(mktemp)
     if fetch "https://github.com/tree-sitter/tree-sitter/releases/latest/download/$asset" "$tmp" &&
-      gunzip -c "$tmp" >"$dest/tree-sitter" && chmod +x "$dest/tree-sitter" && "$dest/tree-sitter" --version >/dev/null 2>&1; then
+      gunzip -c "$tmp" >"$dest/tree-sitter" && chmod +x "$dest/tree-sitter" && ts_new_enough "$dest/tree-sitter"; then
       rm -f "$tmp"
-      say "tree-sitter CLI: $("$dest/tree-sitter" --version | head -n1)"
-      check_user_path "$dest"
+      say "tree-sitter CLI: $dest/tree-sitter ($(ts_version "$dest/tree-sitter"))"
+      check_user_tree_sitter "$dest/tree-sitter"
       return 0
     fi
     rm -f "$tmp" "$dest/tree-sitter"
@@ -77,9 +108,9 @@ ensure_tree_sitter() {
   fi
   if have cargo; then
     say "tree-sitter CLI 설치: cargo install --locked tree-sitter-cli (소스 빌드, 몇 분 걸립니다)"
-    if cargo install --locked tree-sitter-cli; then
-      say "tree-sitter CLI: $(tree-sitter --version | head -n1)"
-      check_user_path "$HOME/.cargo/bin"
+    if cargo install --locked tree-sitter-cli && ts_new_enough "$HOME/.cargo/bin/tree-sitter"; then
+      say "tree-sitter CLI: $HOME/.cargo/bin/tree-sitter ($(ts_version "$HOME/.cargo/bin/tree-sitter"))"
+      check_user_tree_sitter "$HOME/.cargo/bin/tree-sitter"
       return 0
     fi
   fi

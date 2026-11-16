@@ -59,6 +59,28 @@ local function kickstart_parsers()
   return names
 end
 
+-- nvim-treesitter's own minimum (TREE_SITTER_MIN_VER in its health check).
+local TS_MIN = { 0, 26, 1 }
+
+--- Path and version of the tree-sitter CLI Neovim would run, plus whether it is new enough.
+---@return string? path, string? version, boolean ok
+local function tree_sitter_cli()
+  local exe = vim.fn.exepath 'tree-sitter'
+  if exe == '' then return nil, nil, false end
+  local out = vim.system({ exe, '--version' }, { text = true }):wait().stdout or ''
+  local v = { out:match '(%d+)%.(%d+)%.(%d+)' }
+  if #v < 3 then return exe, nil, false end
+  local ok = true
+  for i = 1, 3 do
+    local n = tonumber(v[i])
+    if n ~= TS_MIN[i] then
+      ok = n > TS_MIN[i]
+      break
+    end
+  end
+  return exe, table.concat(v, '.'), ok
+end
+
 local function have_c_compiler()
   for _, cc in ipairs { 'cc', 'gcc', 'clang', 'cl', 'zig' } do
     if vim.fn.executable(cc) == 1 then return true end
@@ -71,8 +93,13 @@ local function wait_parsers()
   local ok, ts = pcall(require, 'nvim-treesitter')
   local parsers = kickstart_parsers()
   if not ok or #parsers == 0 then return end
-  if vim.fn.executable 'tree-sitter' == 0 then
+  local cli, version, new_enough = tree_sitter_cli()
+  if not cli then
     say 'tree-sitter CLI 가 없어 treesitter 파서를 설치할 수 없습니다 (설치 스크립트가 설치합니다).'
+    return
+  end
+  if not new_enough then
+    say(('tree-sitter CLI %s (%s) 가 너무 오래돼 파서를 설치할 수 없습니다. 0.26.1 이상이 필요합니다.'):format(version or '?', cli))
     return
   end
   if not have_c_compiler() then
@@ -119,8 +146,14 @@ local function report()
     end
     local absent = vim.tbl_filter(function(name) return not installed[name] end, wanted)
     say(('treesitter 파서 %d/%d개 설치됨%s'):format(#wanted - #absent, #wanted, #absent > 0 and ('  없음: ' .. table.concat(absent, ', ')) or ''))
-    local cli = vim.fn.exepath 'tree-sitter'
-    say('tree-sitter CLI  ' .. (cli ~= '' and cli or '없음 — 파서를 설치할 수 없어 문법 색칠이 동작하지 않습니다'))
+    local cli, version, new_enough = tree_sitter_cli()
+    if not cli then
+      say 'tree-sitter CLI  없음 — 파서를 설치할 수 없어 문법 색칠이 동작하지 않습니다'
+    elseif not new_enough then
+      say(('tree-sitter CLI  %s (%s) — 너무 오래됨, 0.26.1 이상 필요. 지우거나 새 버전이 PATH 에서 먼저 잡히게 하세요'):format(cli, version or '?'))
+    else
+      say(('tree-sitter CLI  %s (%s)'):format(cli, version))
+    end
   end
 end
 
