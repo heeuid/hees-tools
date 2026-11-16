@@ -140,8 +140,12 @@ kickstart의 `git status`에 나타나지 않습니다.
 
 ### 탐색기에서 원하는 창에 열기
 
+탐색기 안에서는 커서를 숨기고 줄 강조만으로 위치를 보여 줍니다(`:` 명령줄과 입력창에서는 커서가 보입니다).
+
 | 키 | 우클릭 메뉴 | 동작 |
 |---|---|---|
+| `l`, `→` | — | 디렉토리: 펼치기 (이미 펼쳐져 있으면 첫 항목으로) / 파일: 열기 |
+| `h`, `←` | — | 펼쳐진 디렉토리: 접기 / 파일이나 닫힌 디렉토리: 상위 디렉토리를 접고 그리로 이동 |
 | `Enter`, 더블클릭 | Open | 마지막으로 있던 편집 창에 열기 (원하는 창을 먼저 클릭해 두면 그 창) |
 | `w` | Open in ▸ Pick window… | 창마다 큰 글자가 뜸 → 글자를 누르거나 **그 창을 클릭** (`Esc` 취소). 편집 창이 하나면 바로 엶 |
 | `s` / `S` | Open in ▸ Vertical / Horizontal split | 세로 / 가로로 나눠서 열기 |
@@ -149,6 +153,7 @@ kickstart의 `git status`에 나타나지 않습니다.
 
 `w`는 kickstart의 neo-tree에 원래 있는 키이고, 이 설정은 그 키에 필요한
 [nvim-window-picker](https://github.com/s1n7ax/nvim-window-picker)만 설치합니다.
+`h`/`l`은 탐색기 창 안에서만 바뀝니다(neo-tree 기본값의 `l` 미리보기 창 이동은 대신 쓰지 않습니다).
 
 메뉴는 키보드로도 똑같이 씁니다. `<Space>m` 또는 `Shift+F10`으로 열고, `j`/`k`/방향키로 움직이고, `Enter`/`l`로
 실행하거나 하위 메뉴를 열고, `h`로 한 단계 뒤로, `Esc`로 닫습니다. 마우스를 올리면 하위 메뉴가 열립니다.
@@ -232,7 +237,7 @@ kickstart.nvim/
 ├─ bin/nvk.cmd  bin/nvk           (선택) -AppName 으로 나란히 설치했을 때의 실행기
 ├─ overlay/                       kickstart 설정에 복사되는 플러그인
 │  ├─ plugin/hees.lua             진입점 (init.lua 다음에 자동 로드)
-│  └─ lua/hees/ (colors, ui, window_picker, menu, context, util, nes/)
+│  └─ lua/hees/ (colors, ui, window_picker, explorer, menu, context, util, nes/)
 ├─ logs/                          (git 제외) 스크립트 출력 기록
 ├─ tools/
 │  ├─ patch-kickstart.lua         kickstart 자체 기능 켜기 (두 OS 공통, nvim -l 로 실행)

@@ -10,5 +10,6 @@ vim.g.loaded_hees = true
 require 'hees.colors' -- Catppuccin Latte, replacing kickstart's tokyonight
 require 'hees.ui' -- clickable buffer tabs and gutter, overlay highlights
 require 'hees.window_picker' -- explorer `w`: open a file in the window you pick
+require 'hees.explorer' -- explorer: row highlight instead of a cursor, h/l collapse/expand/open
 require('hees.nes').setup() -- next edit suggestions via the Claude / Codex / Gemini CLI
 require('hees.context').setup() -- right-click (and <leader>m / Shift+F10) context menus

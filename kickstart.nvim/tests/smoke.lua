@@ -126,6 +126,52 @@ local function run()
   end
   vim.api.nvim_set_current_buf(buf)
 
+  -- Explorer: hidden cursor in the tree, h/l collapse/expand/open.
+  do
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root .. '/sub', 'p')
+    vim.fn.writefile({ 'hello' }, root .. '/sub/a.txt')
+    local cwd = vim.fn.getcwd()
+    vim.cmd.cd(root)
+    vim.cmd 'Neotree show dir=. reveal=false'
+    local tree
+    vim.wait(3000, function()
+      for _, w in ipairs(vim.api.nvim_list_wins()) do
+        if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'neo-tree' then tree = w end
+      end
+      return tree ~= nil and vim.fn.search('sub', 'nw') > 0
+    end)
+    vim.api.nvim_set_current_win(tree)
+    local tbuf = vim.api.nvim_get_current_buf()
+    vim.wait(2000, function() return vim.fn.maparg('l', 'n', false, true).desc == 'Explorer: expand directory / open file' end)
+    check('explorer: l/h mapped in the tree', vim.fn.maparg('l', 'n', false, true).desc == 'Explorer: expand directory / open file' and vim.fn.maparg('h', 'n', false, true).desc ~= nil)
+    check('explorer: cursor hidden in the tree', vim.o.guicursor:find('n:HeesHiddenCursor', 1, true) ~= nil, vim.o.guicursor)
+    local state = require('neo-tree.sources.manager').get_state_for_window()
+    local function node() return state.tree:get_node() end
+    vim.fn.search 'sub'
+    check('explorer: on the sub directory', node() and node().name == 'sub', node() and node().name)
+    feed 'l'
+    vim.wait(2000, function() return node():is_expanded() end)
+    check('explorer: l expands a directory', node():is_expanded())
+    feed 'l'
+    vim.wait(1000, function() return node().name == 'a.txt' end)
+    check('explorer: l on an expanded directory steps into it', node().name == 'a.txt', node().name)
+    feed 'h'
+    vim.wait(2000, function() return node().name == 'sub' and not node():is_expanded() end)
+    check('explorer: h on a file collapses the parent and moves to it', node().name == 'sub' and not node():is_expanded(), node().name)
+    feed 'l'
+    vim.wait(2000, function() return node():is_expanded() end)
+    feed 'l'
+    vim.wait(1000, function() return node().name == 'a.txt' end)
+    feed 'l'
+    vim.wait(2000, function() return vim.api.nvim_buf_get_name(0):find('a.txt', 1, true) ~= nil end)
+    check('explorer: l on a file opens it in an editor window', vim.api.nvim_buf_get_name(0):find('a.txt', 1, true) ~= nil and vim.bo.filetype ~= 'neo-tree')
+    check('explorer: cursor shown again outside the tree', vim.o.guicursor:find('HeesHiddenCursor', 1, true) == nil, vim.o.guicursor)
+    if vim.api.nvim_buf_is_valid(tbuf) then vim.cmd 'Neotree close' end
+    vim.cmd.cd(cwd)
+    vim.api.nvim_set_current_buf(buf)
+  end
+
   -- window-picker: with two other editor windows, a typed hint letter picks one of them.
   local here = vim.api.nvim_get_current_win()
   vim.cmd 'vsplit | split'
