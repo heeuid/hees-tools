@@ -175,8 +175,22 @@ kickstart의 `git status`에 나타나지 않습니다.
   Git            ▸               Inlay hints      Toggle REPL
   Search         ▸               Restart LSP
   ─────────                      LSP health
+  Window         ▸
   File           ▸
 ```
+
+**Window ▸** 로 편집 창을 마우스로 나누고 정리합니다. 항목마다 Neovim 기본 창 명령을 그대로 실행합니다.
+
+| 항목 | 같은 키 | |
+|---|---|---|
+| Split right / Split below | `<C-w>v` / `<C-w>s` | 세로 / 가로로 나누기 |
+| Open in new tab | `:tab split` | 이 버퍼를 새 탭에서도 열기 |
+| Move to new tab | `<C-w>T` | 이 창을 새 탭으로 옮기기 |
+| Equalize sizes | `<C-w>=` | 창 크기 똑같이 |
+| Close window / Close other windows | `<C-w>c` / `<C-w>o` | 이 창 / 나머지 창 닫기 |
+
+창이 하나뿐이면 옮기기·크기 맞추기·닫기 항목은 흐리게 표시됩니다. 파일을 분할로 여는 것은 탐색기 우클릭
+(**Open in ▸**)과 버퍼 탭 우클릭 메뉴에 있습니다.
 
 ## NES (Next Edit Suggestion)
 

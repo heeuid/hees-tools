@@ -97,6 +97,31 @@ local function run()
   local tab = ctx._tab_items(buf)
   check('tab menu has Close others', tab[2].label == 'Close others')
 
+  -- Window submenu: split from the menu, then close the others again.
+  check('buffer menu has Window group', vim.tbl_contains(labels, 'Window'), table.concat(labels, ', '))
+  local function editor_wins() return #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w).relative == '' end, vim.api.nvim_tabpage_list_wins(0)) end
+  local single = ctx._window_items()
+  check('window menu: close items disabled with one window', single[7].enabled == false and single[8].enabled == false)
+  local before = editor_wins()
+  menu.open(ctx._window_items, { row = 2, col = 2 })
+  feed '<CR>' -- Split right
+  vim.wait(500, function() return editor_wins() == before + 1 end)
+  check('window menu: Split right splits the window', editor_wins() == before + 1, editor_wins())
+  menu.open(ctx._window_items, { row = 2, col = 2 })
+  feed 'j'
+  feed '<CR>' -- Split below
+  vim.wait(500, function() return editor_wins() == before + 2 end)
+  check('window menu: Split below splits the window', editor_wins() == before + 2, editor_wins())
+  check('window menu: close items enabled with several windows', ctx._window_items()[8].enabled == true)
+  menu.open(ctx._window_items, { row = 2, col = 2 })
+  for _ = 1, 6 do
+    feed 'j'
+  end
+  feed '<CR>' -- Close other windows
+  vim.wait(500, function() return editor_wins() == 1 end)
+  check('window menu: Close other windows leaves one', editor_wins() == 1, editor_wins())
+  vim.api.nvim_set_current_buf(buf)
+
   vim.cmd 'Neotree show'
   vim.wait(1500, function() return #vim.tbl_filter(function(w) return vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'neo-tree' end, vim.api.nvim_list_wins()) > 0 end)
   local tree_win

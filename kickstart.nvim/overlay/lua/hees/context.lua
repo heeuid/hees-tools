@@ -163,6 +163,26 @@ local function search_items(visual)
   }
 end
 
+--- Split and arrange editor windows. Each item runs the :wincmd behind Neovim's own <C-w> key
+--- (shown as the hint) directly, so it works the same however <C-w> is mapped.
+local function window_items()
+  local editor_wins = #vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w).relative == '' end, vim.api.nvim_tabpage_list_wins(0))
+  local several = editor_wins > 1
+  local function wincmd(c)
+    return function() vim.cmd.wincmd(c) end
+  end
+  return {
+    { label = 'Split right', hint = '<C-w>v', action = wincmd 'v' },
+    { label = 'Split below', hint = '<C-w>s', action = wincmd 's' },
+    { label = 'Open in new tab', hint = ':tab split', action = function() vim.cmd 'tab split' end },
+    { label = 'Move to new tab', hint = '<C-w>T', action = wincmd 'T', enabled = several },
+    sep,
+    { label = 'Equalize sizes', hint = '<C-w>=', action = wincmd '=', enabled = several },
+    { label = 'Close window', hint = '<C-w>c', action = wincmd 'c', enabled = several or #vim.api.nvim_list_tabpages() > 1 },
+    { label = 'Close other windows', hint = '<C-w>o', action = wincmd 'o', enabled = several },
+  }
+end
+
 local function buffer_items(visual)
   local file = vim.api.nvim_buf_get_name(0)
   local editable = vim.bo.modifiable
@@ -178,6 +198,7 @@ local function buffer_items(visual)
     { label = 'Git', items = function() return git_items(visual) end, enabled = has_git },
     { label = 'Search', items = function() return search_items(visual) end, enabled = has_telescope },
     sep,
+    { label = 'Window', items = window_items },
     { label = 'File', items = file_items, enabled = file ~= '' },
   }
   if visual then
@@ -351,6 +372,7 @@ end
 
 -- Exposed for tests.
 M._buffer_items = buffer_items
+M._window_items = window_items
 M._explorer_items = explorer_items
 M._tab_items = tab_items
 M._neo_tree_state = neo_tree_state
