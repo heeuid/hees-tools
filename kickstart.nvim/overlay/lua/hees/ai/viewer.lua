@@ -46,7 +46,7 @@ local function detail_lines(e)
   }
   if e.reason then table.insert(lines, '- **reason**: ' .. e.reason) end
   vim.list_extend(lines, {
-    ('- **kind**: %s · **backend**: %s · **model**: %s'):format(e.kind or '?', e.backend or '?', e.model or 'CLI default'),
+    ('- **task**: %s · **backend**: %s · **model**: %s'):format(e.task or e.kind or '?', e.backend or '?', e.model or 'CLI default'),
     ('- **time**: %s · **elapsed**: %s · **exit**: %s'):format(os.date('%Y-%m-%d %H:%M:%S', e.time or 0), e.elapsed and ('%.2fs'):format(e.elapsed) or 'running', tostring(e.code)),
     '- **cwd**: ' .. (e.cwd or '?'),
   })
@@ -100,7 +100,7 @@ function M.refresh()
     table.insert(lines, ('%s %s  %-7s %-24s %7s  %s'):format(
       mark[1],
       os.date('%m-%d %H:%M:%S', e.time or 0),
-      e.kind or '?',
+      e.task or e.kind or '?',
       (e.backend or '?') .. (e.model and ('/' .. e.model) or ''),
       e.elapsed and ('%.1fs'):format(e.elapsed) or '',
       e.title or ''

@@ -194,7 +194,7 @@ kickstart의 `git status`에 나타나지 않습니다.
 
 ## AI (Claude / Codex / Gemini)
 
-설치된 AI CLI 하나를 골라(GPT는 `codex`) 두 가지에 씁니다. 모든 요청은 무엇을 실행했고 무엇을 주고받았는지 그대로 기록되고, 요청 기록 창에서 볼 수 있습니다.
+설치된 AI CLI(GPT는 `codex`)를 다음 편집 제안, 코드 분석, 디버그 상태 분석에 씁니다. 작업마다 다른 백엔드·모델을 쓸 수 있습니다. 모든 요청은 무엇을 실행했고 무엇을 주고받았는지 그대로 기록되고, 요청 기록 창에서 볼 수 있습니다.
 우클릭 메뉴의 **AI ▸**에 모두 있습니다.
 
 ### 다음 편집 제안 (NES)
@@ -226,21 +226,40 @@ kickstart의 `git status`에 나타나지 않습니다.
 - **답**: 오른쪽 Markdown 창에 표시됩니다(`q`로 닫기). 기본으로 한국어로 답하게 합니다.
 - `:Ai explain` / `:Ai review` / `:Ai ask 질문` (범위를 주면 `:10,30Ai review`처럼 그 줄들).
 
-### 백엔드와 모델
+### 디버그 상태 분석 (`<Space>ag`)
 
-| 키 | 메뉴 (AI ▸) | 하는 일 |
-|---|---|---|
-| `<Space>ab` | Backend ▸ | claude / codex / gemini 선택 (설치 안 된 것은 흐리게). 다음 편집과 분석이 함께 씀 |
-| `<Space>am` | Models ▸ Next edit… | 다음 편집용 모델 (비우면 기본: claude는 `haiku`, 나머지는 CLI 기본) |
-| — | Models ▸ Analysis… | 분석용 모델 (비우면 CLI 기본). `:Ai model analyze <이름>` |
+디버거(nvim-dap)가 중단점이나 예외에서 멈췄을 때, 디버거만 아는 정보를 모아 AI에 묻습니다.
 
-모델은 백엔드마다 따로 저장됩니다. 설정은 `<설정 폴더>/data/ai/state.json` (`:Ai status`로 확인).
+- **보내는 것**: 멈춘 이유(중단점, 예외, step 등)와 예외 정보, 현재 위치와 주변 소스(현재 줄 표시), 호출 스택(최대 25단계),
+  현재 프레임의 변수(scope별, 구조체·리스트 같은 값은 한 단계 펼침), 그 파일의 LSP 진단.
+- **묻는 것**: 왜 여기서 멈췄는지, 이상해 보이는 값, 버그의 원인 후보, 다음에 확인할 것. 원하면 질문을 직접 입력할 수 있습니다.
+- 키 `<Space>ag`, 우클릭 **AI ▸ Debug state ▸** 또는 **Debug ▸ Ask AI ▸**, `:Ai debug [질문]`. 멈춘 상태가 아니면 메뉴가 흐리게 표시됩니다.
+- 답은 코드 분석과 같은 오른쪽 창에 나옵니다.
+
+### 작업별 백엔드와 모델
+
+작업마다 백엔드와 모델을 따로 정할 수 있습니다. 비워 둔 것은 기본값을 따릅니다.
+
+| 작업 | 쓰이는 곳 |
+|---|---|
+| Next edit (`nes`) | 다음 편집 제안 |
+| Explain / Review / Ask | 코드 분석 |
+| Debug state (`debug`) | 디버그 상태 분석 |
+
+- **백엔드**: 작업 설정 → 기본 백엔드(`<Space>ab`, AI ▸ Backends & models ▸ Default backend).
+- **모델**: 작업 설정(백엔드마다 따로 저장) → 기본값(claude 다음 편집은 `haiku`, 나머지는 CLI 기본 모델).
+- **메뉴**: AI ▸ **Backends & models ▸** 에 작업마다 지금 값이 보입니다(`Review: codex / some-model`).
+  작업을 고르면 **Backend ▸**(기본 따르기 / claude / codex / gemini), **Model…**, **Reset to defaults**.
+  - Model…: claude는 `haiku`·`sonnet`·`opus` 중에서 고르거나 직접 입력, codex·gemini는 그 CLI가 받는 이름을 입력합니다.
+- **명령**: `:Ai task review backend codex`, `:Ai task review model <이름>`(`default`면 기본값), `:Ai task review reset`, `:Ai status`(전체 보기).
+- `<Space>am`은 다음 편집 모델을 바로 고릅니다.
+- 설정은 `<설정 폴더>/data/ai/state.json`. 예전 "다음 편집 모델 / 분석 모델" 설정은 처음 불러올 때 작업별 설정으로 옮겨집니다.
 
 ### 요청 기록 (`<Space>al`, AI ▸ Request log)
 
 새 탭에 왼쪽은 요청 목록(최근 것부터, 7일), 오른쪽은 고른 요청의 전체 기록이 나옵니다.
 
-- **목록**: 상태(`…` 실행 중, `✓` 성공, `✗` 실패), 시각, 종류(nes/analyze), 백엔드/모델, 걸린 시간, 제목. 실행 중인 요청도 바로 나타나고 끝나면 갱신됩니다.
+- **목록**: 상태(`…` 실행 중, `✓` 성공, `✗` 실패), 시각, 작업(nes/explain/review/ask/debug), 백엔드/모델, 걸린 시간, 제목. 실행 중인 요청도 바로 나타나고 끝나면 갱신됩니다.
 - **기록**: 실행한 **명령**, 작업 폴더, stdin으로 보낸 **입력(프롬프트) 전체**, 받은 **출력(답) 전체**, stderr, 종료 코드, 결과(예: `2 edits shown`, `parse error …`).
 - 키: `j`/`k`나 클릭으로 이동하면 오른쪽이 바뀜, `<CR>`/`l` 기록으로, `h` 목록으로, `y` 명령 복사, `Y` 답 복사, `o` 원본 파일 열기, `r` 새로고침, `q` 닫기.
 - 원본: `<설정 폴더>/data/ai/logs/<날짜>.jsonl` — 요청 하나가 한 줄(JSON)이고, 위 내용을 가공하지 않고 그대로 남깁니다. 위치는 `HEES_NVIM_DATA`로 바꿀 수 있습니다.
@@ -263,7 +282,7 @@ kickstart 키와 Neovim 기본 키는 바꾸지 않습니다. 이 설정이 새�
 |---|---|---|
 | 오른쪽 클릭 | 노멀/비주얼/입력 | 컨텍스트 메뉴 (기본 PopUp 메뉴 대신) |
 | `<Space>m`, `Shift+F10` | 노멀/비주얼 | 컨텍스트 메뉴 |
-| `<Space>a…` | 노멀/비주얼 | AI: 다음 편집, 분석, 백엔드/모델, 요청 기록 (위 표) |
+| `<Space>a…` | 노멀/비주얼 | AI: 다음 편집, 코드·디버그 분석, 작업별 백엔드/모델, 요청 기록 (위 표) |
 
 kickstart의 키는 그대로입니다: 탐색기 `\`, 디버그 `F5` `F1` `F2` `F3` `F7` `<Space>b` `<Space>B`, LSP `grd` `grr` `gri` `grt` `grD` `grn` `gra` `gO` `gW`, 검색 `<Space>s…`, git `<Space>h…`.
 

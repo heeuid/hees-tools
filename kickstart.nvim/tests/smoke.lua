@@ -367,6 +367,123 @@ local function run()
   check('AI menu has next edit, analysis, backend, models, log', vim.tbl_contains(ai_labels, 'Suggest next edit') and vim.tbl_contains(ai_labels, 'Explain function at cursor') and vim.tbl_contains(ai_labels, 'Request log') and #ai_items <= 15, table.concat(ai_labels, ' | '))
   vim.api.nvim_set_current_buf(buf)
 
+  -- [[ Per-task backends and models ]]
+  local settings = require 'hees.ai.settings'
+  local data_before = vim.env.HEES_NVIM_DATA
+  vim.env.HEES_NVIM_DATA = vim.fn.tempname()
+  vim.fn.mkdir(vim.env.HEES_NVIM_DATA .. '/nes', 'p')
+  vim.fn.writefile({ vim.json.encode { backend = 'claude', models = { claude = 'sonnet' }, analyze_models = { codex = 'old-codex-model' }, auto = false } }, vim.env.HEES_NVIM_DATA .. '/nes/state.json')
+  settings._reload()
+  local b, m = settings.resolve 'nes'
+  check('settings: old next-edit model moved to the nes task', b == 'claude' and m == 'sonnet', b .. '/' .. tostring(m))
+  b, m = settings.resolve 'review'
+  check('settings: unset task follows default backend and built-in default', b == 'claude' and m == nil, b .. '/' .. tostring(m))
+  settings.set_task_backend('review', 'codex')
+  b, m = settings.resolve 'review'
+  check('settings: task backend, old analysis model moved with it', b == 'codex' and m == 'old-codex-model', b .. '/' .. tostring(m))
+  check('settings: other tasks unaffected', (settings.resolve 'explain') == 'claude')
+  settings.set_task_model('review', 'some-model')
+  check('settings: task model for its backend', select(2, settings.resolve 'review') == 'some-model' and settings.describe('review'):find('codex / some-model', 1, true) ~= nil, settings.describe 'review')
+  settings._reload()
+  check('settings: saved and read back', select(2, settings.resolve 'review') == 'some-model')
+  settings.reset_task 'review'
+  check('settings: reset follows defaults again', (settings.resolve 'review') == 'claude')
+  vim.env.HEES_NVIM_DATA = data_before
+  settings._reload()
+
+  -- [[ Debug state analysis (nvim-dap + debugpy) ]]
+  local dap = require 'dap'
+  local py_config
+  for _, c in ipairs(dap.configurations.python or {}) do
+    if c.request == 'launch' then py_config = c end
+  end
+  if not py_config then
+    io.stdout:write 'skip  debug: no python launch configuration (debugpy not installed)\n'
+  else
+    local py = vim.fn.tempname() .. '.py'
+    vim.fn.writefile({ 'def double(x):', '    y = x * 2', '    return y', '', 'print(double(21))' }, py)
+    vim.cmd('edit ' .. vim.fn.fnameescape(py))
+    vim.api.nvim_win_set_cursor(0, { 3, 0 })
+    dap.set_breakpoint()
+    dap.run(vim.tbl_extend('force', py_config, { program = py, console = 'internalConsole' }))
+    vim.wait(60000, function()
+      local s = dap.session()
+      return s ~= nil and s.stopped_thread_id ~= nil and s.current_frame ~= nil
+    end, 200)
+    local ai_debug = require 'hees.ai.debug'
+    if not ai_debug.is_stopped() then
+      -- The adapter may not start in this environment; the fake-session checks below still cover the logic.
+      io.stdout:write 'skip  debug: debugpy session did not stop at the breakpoint (adapter did not start here)\n'
+      pcall(dap.terminate)
+      pcall(function() require('dapui').close() end)
+      vim.cmd 'silent! only'
+      vim.api.nvim_set_current_buf(buf)
+      goto debug_done
+    end
+    check('debug: stopped at the breakpoint', ai_debug.is_stopped())
+    local dctx = ai_debug.collect(dap.session())
+    check('debug: location and frame', dctx and dctx.line == 3 and dctx.frame:find('double', 1, true) ~= nil, dctx and (dctx.frame .. ':' .. dctx.line))
+    check('debug: stop reason recorded', dctx and dctx.reason:find('breakpoint', 1, true) ~= nil, dctx and dctx.reason)
+    check('debug: call stack has the caller', dctx and #dctx.stack >= 2 and dctx.stack[1]:find('double', 1, true) ~= nil, dctx and vim.inspect(dctx.stack))
+    local locals = dctx and dctx.scopes[1] and table.concat(dctx.scopes[1].lines, '\n') or ''
+    check('debug: local variables with values', locals:find('x: int = 21', 1, true) ~= nil and locals:find('y: int = 42', 1, true) ~= nil, locals)
+    check('debug: source with the current line marked', dctx and vim.tbl_contains(dctx.source, '>3|     return y'), dctx and vim.inspect(dctx.source))
+    local dprompt = dctx and ai_debug.build_prompt(dctx) or ''
+    check('debug: prompt has stack, variables and source', dprompt:find('## Call stack', 1, true) and dprompt:find('## Variables', 1, true) and dprompt:find('>3|', 1, true), dprompt)
+    local real = require('hees.ai.backends').build
+    require('hees.ai.backends').build = function(_, _, p) return { argv = echo_argv, stdin = p } end
+    ai_debug.run()
+    vim.wait(15000, function() return not analyze.is_busy() end)
+    require('hees.ai.backends').build = real
+    local dlast = ai_log.all(1)[1]
+    check('debug: request logged under the debug task', dlast.task == 'debug' and dlast.title:find('Debug', 1, true) ~= nil, vim.inspect { dlast.task, dlast.title })
+    dap.terminate()
+    vim.wait(5000, function() return dap.session() == nil end)
+    pcall(function() require('dapui').close() end)
+    vim.cmd 'only'
+    vim.api.nvim_set_current_buf(buf)
+  end
+  ::debug_done::
+
+  -- Debug state collection against a fake nvim-dap session (no adapter needed).
+  do
+    local py = vim.fn.tempname() .. '.py'
+    vim.fn.writefile({ 'def double(x):', '    y = x * 2', '    return y', '', 'print(double(21))' }, py)
+    local frames = {
+      { id = 1, name = 'double', line = 3, source = { path = py } },
+      { id = 2, name = '<module>', line = 5, source = { path = py } },
+    }
+    local replies = {
+      scopes = { scopes = { { name = 'Locals', variablesReference = 10 } } },
+      variables = {
+        [10] = { variables = { { name = 'x', type = 'int', value = '21', variablesReference = 0 }, { name = 'items', type = 'list', value = '[1, 2]', variablesReference = 11 } } },
+        [11] = { variables = { { name = '0', type = 'int', value = '1', variablesReference = 0 } } },
+      },
+    }
+    local fake = {
+      id = 999,
+      config = { name = 'Python: Launch file', type = 'python' },
+      stopped_thread_id = 1,
+      current_frame = frames[1],
+      threads = { [1] = { frames = frames } },
+      capabilities = {},
+      request = function(_, command, args, cb)
+        if command == 'variables' then return cb(nil, replies.variables[args.variablesReference]) end
+        cb(nil, replies[command])
+      end,
+    }
+    local ai_debug = require 'hees.ai.debug'
+    local fctx = ai_debug.collect(fake)
+    check('debug (fake session): location and frame', fctx and fctx.line == 3 and fctx.frame == 'double', fctx and (fctx.frame .. ':' .. fctx.line))
+    check('debug (fake session): call stack', fctx and #fctx.stack == 2 and fctx.stack[1]:find('#0 double', 1, true) ~= nil and fctx.stack[1]:find('current', 1, true) ~= nil, fctx and vim.inspect(fctx.stack))
+    local flocals = fctx and table.concat(fctx.scopes[1].lines, '\n') or ''
+    check('debug (fake session): variables, structured value expanded', flocals:find('x: int = 21', 1, true) and flocals:find('items: list = [1, 2]', 1, true) and flocals:find('    0: int = 1', 1, true), flocals)
+    check('debug (fake session): source with current line marked', fctx and vim.tbl_contains(fctx.source, '>3|     return y'), fctx and vim.inspect(fctx.source))
+    local fprompt = fctx and ai_debug.build_prompt(fctx, 'why is y 42?') or ''
+    check('debug (fake session): prompt has question, stack, variables, source', fprompt:find('why is y 42?', 1, true) and fprompt:find('## Call stack', 1, true) and fprompt:find('## Variables — Locals', 1, true) and fprompt:find('>3|', 1, true), fprompt)
+    check('debug: not stopped is reported', select(2, ai_debug.collect(nil)) ~= nil)
+  end
+
   -- [[ Backends ]]
   local backends = require 'hees.ai.backends'
   for _, name in ipairs(backends.names) do

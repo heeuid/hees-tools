@@ -362,7 +362,7 @@ function M.request(opts)
   end
   local first = math.max(1, lo - M.config.context_lines)
   local last = math.min(n, hi + M.config.context_lines)
-  local backend = settings.backend()
+  local backend, model = settings.resolve 'nes'
   local req = {
     buf = buf,
     auto = opts.auto,
@@ -375,7 +375,7 @@ function M.request(opts)
     path = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':~:.'),
     filetype = vim.bo[buf].filetype,
     backend = backend,
-    model = settings.model('nes', backend),
+    model = model,
     started = vim.uv.hrtime(),
   }
   local entry, err = run.start({
@@ -386,7 +386,7 @@ function M.request(opts)
     prompt = build_prompt(req),
     instruction = 'Answer with the JSON object only.',
     timeout_ms = M.config.timeout_ms,
-    meta = { file = req.path, range = { first, last } },
+    meta = { task = 'nes', file = req.path, range = { first, last } },
   }, function(e) finish(req, e) end)
   if not entry then return vim.notify('NES: ' .. err, vim.log.levels.ERROR) end
   if entry.status ~= 'running' then return end -- failed to start; already reported in the entry
@@ -439,10 +439,10 @@ local subcommands = {
   dismiss = M.dismiss,
   cancel = M.cancel,
   backend = function(arg)
-    if arg then return settings.set_backend(arg) end
+    if arg then return settings.set_task_backend('nes', arg ~= 'default' and arg or nil) end
     settings.select_backend()
   end,
-  model = function(arg) settings.set_model('nes', arg) end,
+  model = function(arg) settings.set_task_model('nes', arg) end,
   auto = function(arg)
     if arg == 'on' then return settings.set_auto(true) end
     if arg == 'off' then return settings.set_auto(false) end
@@ -450,9 +450,8 @@ local subcommands = {
   end,
   log = function() require('hees.ai.viewer').open() end,
   status = function()
-    vim.notify(('NES: backend=%s model=%s auto=%s busy=%s suggestions=%d'):format(
-      settings.backend(),
-      settings.model 'nes' or 'CLI default',
+    vim.notify(('NES: %s  auto=%s busy=%s suggestions=%d'):format(
+      settings.describe 'nes',
       tostring(settings.auto()),
       tostring(busy ~= nil),
       active and #active.edits or 0

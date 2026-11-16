@@ -123,6 +123,8 @@ local function debug_items()
     sep,
     { label = 'Toggle debug UI', hint = '<F7>', action = '<F7>' },
     { label = 'Toggle REPL', action = function() dap().repl.toggle() end },
+    sep,
+    { label = 'Ask AI', items = function() return require('hees.ai').debug_items() end, enabled = function() return require('hees.ai.debug').is_stopped() end },
   }
 end
 

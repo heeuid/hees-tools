@@ -9,7 +9,7 @@ local M = {}
 
 -- Fields written to disk (handles and callbacks on the entry are left out).
 local FIELDS = {
-  'uid', 'id', 'kind', 'title', 'time', 'backend', 'model', 'cwd', 'argv', 'prompt', 'stdout', 'stderr', 'answer',
+  'uid', 'id', 'kind', 'task', 'title', 'time', 'backend', 'model', 'cwd', 'argv', 'prompt', 'stdout', 'stderr', 'answer',
   'code', 'signal', 'elapsed', 'status', 'reason', 'outcome', 'file', 'range',
 }
 

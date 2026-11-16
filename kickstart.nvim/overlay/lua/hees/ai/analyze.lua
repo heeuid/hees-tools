@@ -31,6 +31,8 @@ local function fence(lines, lang)
   return ticks .. (lang or '') .. '\n' .. body .. '\n' .. ticks
 end
 
+M.fence = fence
+
 --- Build the prompt. Exposed for tests.
 ---@param req { task: string, question: string?, path: string, filetype: string, first: integer, last: integer, line_count: integer, lines: string[], cursor: integer[], scope: string, ctx: hees.ai.LspContext }
 function M.build_prompt(req)
@@ -119,6 +121,68 @@ function M.cancel()
   if current and current.cancel then current.cancel() end
 end
 
+--- Send a prompt for `task` with the task's backend and model, show progress and then the answer
+--- in the answer window. Used by code analysis and by debug-state analysis (hees.ai.debug).
+---@param task string 'explain' | 'review' | 'ask' | 'debug'
+---@param spec { title: string, header: string[], prompt: string, meta: table? }
+function M.ask_ai(task, spec)
+  if current then M.cancel() end
+  local backend, model = settings.resolve(task)
+  local header = vim.deepcopy(spec.header)
+  table.insert(header, 2, ('%s · %s%s'):format(settings.labels[task], backend, model and (' (' .. model .. ')') or ''))
+
+  local entry, err = run.start({
+    kind = 'analyze',
+    title = spec.title,
+    backend = backend,
+    model = model,
+    prompt = spec.prompt,
+    instruction = 'Answer the request above.',
+    meta = vim.tbl_extend('force', spec.meta or {}, { task = task }),
+  }, function(e)
+    if current == e then current = nil end
+    stop_timer()
+    local lines = vim.list_extend(vim.deepcopy(header), { '' })
+    if e.status == 'ok' then
+      table.insert(lines, ('_%.1fs · 요청 기록: %s_'):format(e.elapsed, util.key_hint '<leader>al'))
+      table.insert(lines, '')
+      vim.list_extend(lines, vim.split(vim.trim(e.text or ''), '\n', { plain = true }))
+      e.outcome = 'answered'
+    else
+      table.insert(lines, ('**%s** — %s'):format(e.status, e.reason or ''))
+      table.insert(lines, ('요청 기록에서 명령과 출력을 확인하세요: %s'):format(util.key_hint '<leader>al'))
+      e.outcome = e.status
+    end
+    show(lines)
+  end)
+  if not entry then
+    show(vim.list_extend(header, { '', '**error** — ' .. tostring(err) }))
+    return
+  end
+  if entry.status ~= 'running' then return end
+  current = entry
+
+  local frames, i, started = util.icons().spinner, 0, vim.uv.hrtime()
+  stop_timer()
+  result.timer = vim.uv.new_timer()
+  result.timer:start(
+    0,
+    150,
+    vim.schedule_wrap(function()
+      if current ~= entry then return end
+      i = i % #frames + 1
+      show(vim.list_extend(vim.deepcopy(header), { '', ('%s %s 에 요청 중… %.1fs  (취소: %s)'):format(frames[i], backend, (vim.uv.hrtime() - started) / 1e9, util.key_hint '<leader>ac') }))
+    end)
+  )
+end
+
+--- Show a status line in the answer window before a request starts (e.g. while collecting context).
+---@param lines string[]
+function M.show_status(lines)
+  show(lines)
+  vim.cmd 'redraw'
+end
+
 --- Analyze code. `opts.range` = { first, last } for a selection; `opts.question` for task 'ask'.
 ---@param task string 'explain' | 'review' | 'ask'
 ---@param opts { range: integer[]?, question: string? }?
@@ -129,17 +193,13 @@ function M.run(task, opts)
       if q and vim.trim(q) ~= '' then M.run('ask', vim.tbl_extend('force', opts, { question = q })) end
     end)
   end
-  if current then M.cancel() end
 
   local buf, win = vim.api.nvim_get_current_buf(), vim.api.nvim_get_current_win()
   local cursor = vim.api.nvim_win_get_cursor(win)
   local n = vim.api.nvim_buf_line_count(buf)
-  local backend = settings.backend()
-  local model = settings.model('analyze', backend)
   local path = vim.api.nvim_buf_get_name(buf) ~= '' and vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ':~:.') or '[No Name]'
 
-  show { ('# %s · %s'):format(M.tasks[task].title, path), '', '_LSP 정보 수집 중…_' }
-  vim.cmd 'redraw'
+  M.show_status { ('# %s · %s'):format(M.tasks[task].title, path), '', '_LSP 정보 수집 중…_' }
 
   local first, last, scope
   if opts.range then
@@ -179,56 +239,17 @@ function M.run(task, opts)
     scope = scope,
     ctx = ctx,
   }
-  local title = ('%s %s:%d-%d'):format(M.tasks[task].title, path, first, last)
   local header = {
     ('# %s · %s:%d-%d'):format(M.tasks[task].title, path, first, last),
-    ('%s · %s%s · LSP: %s'):format(scope, backend, model and (' (' .. model .. ')') or '', #ctx.clients > 0 and table.concat(ctx.clients, ', ') or '없음'),
+    ('%s · LSP: %s'):format(scope, #ctx.clients > 0 and table.concat(ctx.clients, ', ') or '없음'),
   }
   if opts.question then table.insert(header, '> ' .. opts.question) end
-
-  local entry, err = run.start({
-    kind = 'analyze',
-    title = title,
-    backend = backend,
-    model = model,
+  M.ask_ai(task, {
+    title = ('%s %s:%d-%d'):format(M.tasks[task].title, path, first, last),
+    header = header,
     prompt = M.build_prompt(req),
-    instruction = 'Answer the request above.',
     meta = { file = path, range = { first, last } },
-  }, function(e)
-    if current == e then current = nil end
-    stop_timer()
-    local lines = vim.list_extend(vim.deepcopy(header), { '' })
-    if e.status == 'ok' then
-      table.insert(lines, ('_%.1fs · 요청 기록: %s_'):format(e.elapsed, util.key_hint '<leader>al'))
-      table.insert(lines, '')
-      vim.list_extend(lines, vim.split(vim.trim(e.text or ''), '\n', { plain = true }))
-      e.outcome = 'answered'
-    else
-      table.insert(lines, ('**%s** — %s'):format(e.status, e.reason or ''))
-      table.insert(lines, ('요청 기록에서 명령과 출력을 확인하세요: %s'):format(util.key_hint '<leader>al'))
-      e.outcome = e.status
-    end
-    show(lines)
-  end)
-  if not entry then
-    show(vim.list_extend(vim.deepcopy(header), { '', '**error** — ' .. tostring(err) }))
-    return
-  end
-  if entry.status ~= 'running' then return end
-  current = entry
-
-  local frames, i, started = util.icons().spinner, 0, vim.uv.hrtime()
-  stop_timer()
-  result.timer = vim.uv.new_timer()
-  result.timer:start(
-    0,
-    150,
-    vim.schedule_wrap(function()
-      if current ~= entry then return end
-      i = i % #frames + 1
-      show(vim.list_extend(vim.deepcopy(header), { '', ('%s %s 에 요청 중… %.1fs  (취소: %s)'):format(frames[i], backend, (vim.uv.hrtime() - started) / 1e9, util.key_hint '<leader>ac') }))
-    end)
-  )
+  })
 end
 
 return M
