@@ -181,21 +181,28 @@ kickstart의 `git status`에 나타나지 않습니다.
   ─────────                      Format buffer    Terminate
   Go to definition grd           Hover            Step           ▸
   Find references  grr           ─────            ─────
-  Go back        C-o             Go to        ▸   Toggle breakpoint Space b
-  Go forward     C-i             Structure    ▸   Breakpoints    ▸
-  ─────────                      Diagnostics  ▸   ─────
-  LSP            ▸               ─────            Toggle debug UI  F7
-  Debug          ▸               Inlay hints      Toggle REPL
-  AI             ▸               Restart LSP
-  Git            ▸               LSP health
+  Back from definition C-t       Go to        ▸   Toggle breakpoint Space b
+  Go back        C-o             Structure    ▸   Breakpoints    ▸
+  Go forward     C-i             Diagnostics  ▸   ─────
+  ─────────                      ─────            Toggle debug UI  F7
+  LSP            ▸               Inlay hints      Toggle REPL
+  Debug          ▸               Restart LSP
+  AI             ▸               LSP health
+  Git            ▸
   Search         ▸
   ─────────
   Window         ▸
   File           ▸
 ```
 
-**Go back / Go forward**는 Neovim 이동 기록(jump list)의 `<C-o>` / `<C-i>`입니다. 정의로 가기, 참조·검색 결과로 가기, `G`·`%` 같은
-큰 이동이 기록되고, 돌아갈 곳이 없으면 흐리게 표시됩니다.
+돌아가기는 두 가지입니다. 돌아갈 곳이 없으면 흐리게 표시됩니다.
+
+| 항목 | 키 | 돌아가는 곳 |
+|---|---|---|
+| Back from definition | `<C-t>` | **태그 스택**: 정의로 가기(`grd`)를 **시작한 곳**으로 바로. 그 뒤에 검색·`G` 등으로 돌아다녔어도 한 번에, 정의를 여러 번 타고 들어갔으면 한 단계씩 |
+| Go back / Go forward | `<C-o>` / `<C-i>` | **이동 기록(jump list)**: 정의로 가기뿐 아니라 검색, `G`, `%`, 참조로 가기 같은 큰 이동을 하나씩 되짚음 |
+
+`grd`는 둘 다에 기록하므로 정의를 보고 바로 돌아올 때는 어느 쪽이든 같고, 정의 파일 안에서 더 움직였다면 `<C-t>`가 출발점으로 바로 갑니다.
 
 **Window ▸** 로 편집 창을 마우스로 나누고 정리합니다. 항목마다 Neovim 기본 창 명령을 그대로 실행합니다.
 

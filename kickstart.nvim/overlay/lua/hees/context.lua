@@ -203,6 +203,10 @@ local function window_items()
   }
 end
 
+-- Two ways back: "Back from definition" pops the tag stack (<C-t>), which Go to definition pushes,
+-- straight to where the jump started; Go back / Go forward walk the jump list (<C-o> / <C-i>),
+-- which also holds searches, G, % and other jumps made since.
+
 --- Whether the jump list has an older (-1) or newer (1) position than the current one.
 local function can_jump(dir)
   local list, idx = unpack(vim.fn.getjumplist())
@@ -253,6 +257,7 @@ local function buffer_items(visual)
     sep,
     { label = 'Go to definition', hint = 'grd', action = 'grd', enabled = lsp_supports 'textDocument/definition' },
     { label = 'Find references', hint = 'grr', action = 'grr', enabled = lsp_supports 'textDocument/references' },
+    { label = 'Back from definition', hint = '<C-t>', action = function() vim.cmd.pop() end, enabled = vim.fn.gettagstack().curidx > 1 },
     { label = 'Go back', hint = '<C-o>', action = function() jump(-1) end, enabled = can_jump(-1) },
     { label = 'Go forward', hint = '<C-i>', action = function() jump(1) end, enabled = can_jump(1) },
     sep,

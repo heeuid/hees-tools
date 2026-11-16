@@ -86,7 +86,7 @@ local function run()
   local top = ctx._buffer_items(false)
   local labels = vim.tbl_map(function(it) return it.label or '---' end, top)
   check('buffer menu has LSP/Debug/AI/Git/Search groups', vim.tbl_contains(labels, 'LSP') and vim.tbl_contains(labels, 'Debug') and vim.tbl_contains(labels, 'AI'), table.concat(labels, ', '))
-  check('buffer menu top level is short (<= 16 rows)', #top <= 16, #top)
+  check('buffer menu top level is short (<= 17 rows)', #top <= 17, #top)
   ctx.open_at_cursor(false)
   check('context menu opens from keyboard', menu.is_open())
   local rendered = vim.api.nvim_buf_get_lines(0, 0, -1, false)
@@ -369,7 +369,7 @@ local function run()
   local structure_labels = structure and vim.tbl_map(function(it) return it.label or '---' end, structure.items) or {}
   local items_now = vim.tbl_map(function(it) return it.label or '---' end, ctx._buffer_items(false))
   check('right double clicks open the same menu (not the built-in PopUp)', vim.fn.maparg('<2-RightMouse>', 'n') ~= '' and vim.fn.maparg('<2-RightMouse>', 'x') ~= '' and vim.fn.maparg('<3-RightMouse>', 'i') ~= '')
-  check('editor menu: Go back / Go forward under Go to definition', vim.tbl_contains(items_now, 'Go back') and vim.tbl_contains(items_now, 'Go forward') and vim.fn.maparg('<X1Mouse>', 'n') ~= '', table.concat(items_now, ' | '))
+  check('editor menu: Go back / Go forward under Go to definition', vim.tbl_contains(items_now, 'Back from definition') and vim.tbl_contains(items_now, 'Go back') and vim.tbl_contains(items_now, 'Go forward') and vim.fn.maparg('<X1Mouse>', 'n') ~= '', table.concat(items_now, ' | '))
   check('LSP menu: Structure has outline, call and type hierarchy', vim.tbl_contains(structure_labels, 'Outline sidebar') and vim.tbl_contains(structure_labels, 'Call hierarchy') and vim.tbl_contains(structure_labels, 'Type hierarchy'), table.concat(structure_labels, ' | '))
 
   local analyze = require 'hees.ai.analyze'
