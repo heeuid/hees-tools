@@ -3,7 +3,8 @@
 [nvim-lua/kickstart.nvim](https://github.com/nvim-lua/kickstart.nvim)을 그대로 설치하고, kickstart에 없는 기능만 플러그인으로 더합니다.
 
 - kickstart가 가진 기능은 kickstart 것을 씁니다: 탐색기(`kickstart.plugins.neo-tree`), 디버거(`kickstart.plugins.debug`), LSP/검색/git 키.
-- 더하는 것: 우클릭 메뉴, 클릭 가능한 버퍼 탭·거터, NES(Claude / Codex / Gemini).
+- 더하는 것: 우클릭 메뉴, 클릭 가능한 버퍼 탭·거터, NES(Claude / Codex / Gemini), Catppuccin Latte 색상 테마.
+- LSP는 C/C++, Rust, Python, Lua, Markdown, TOML, JSON, YAML, Bash가 켜집니다(kickstart의 서버 목록을 켜는 방식).
 - 설치가 끝나면 그냥 `nvim`으로 실행합니다. 설정은 Neovim 기본 경로에, 실행 파일은 PATH 맨 앞에 들어갑니다.
 - 기존 설정(예: LazyVim)은 덮어쓰지 않고 `*.bak-<시각>`으로 옮겨 둡니다. 다른 곳에 설치된 Neovim 파일은 건드리지 않습니다.
 
@@ -81,14 +82,39 @@ Linux/macOS는 같은 명령을 `./nvim-version.sh install --build master --use`
   ninja가 있으면 Ninja 생성기를 씁니다. `-Generator`/`--generator`로 바꿀 수 있습니다.
 - 버전 폴더 위치는 환경 변수 `HEES_NVIM_VERSIONS`로 바꿀 수 있습니다.
 
-### 플러그인만
+### 플러그인만 (kickstart가 이미 깔려 있을 때)
 
 ```powershell
 .\plugins.ps1 install | update | remove [-Purge] | status
 ```
 
-`overlay/`의 파일을 kickstart 설정의 `lua/custom/plugins/hees.lua`, `lua/hees/`에 복사합니다. 이 파일들은
-kickstart clone의 `.git/info/exclude`에 들어가 kickstart의 `git status`에 나타나지 않습니다.
+`overlay/`의 파일을 kickstart 설정의 `plugin/hees.lua`, `lua/hees/`에 복사합니다. Neovim은 설정 폴더의
+`plugin/*.lua`를 `init.lua` 다음에 자동으로 불러오므로, `init.lua`는 건드리지 않습니다. kickstart를 어떻게 설치했든
+(`require 'custom.plugins'` 줄이 주석이든 없든) 동작합니다. 이 파일들은 kickstart clone의 `.git/info/exclude`에 들어가
+kickstart의 `git status`에 나타나지 않습니다.
+
+### 색상 테마와 LSP
+
+- **색상**: [Catppuccin](https://github.com/catppuccin/nvim) Latte(밝은 테마). kickstart의 tokyonight 설정은 그대로 두고,
+  이 플러그인이 그 다음에 `catppuccin-latte`로 바꿉니다. neo-tree, telescope, gitsigns, which-key, bufferline 색도 맞춥니다.
+- **LSP**: kickstart `init.lua`의 `servers` 목록에서 켭니다. 서버는 처음 실행할 때 mason이 설치합니다.
+
+  | 언어 | 서버 | |
+  |---|---|---|
+  | Lua | `lua_ls` | kickstart 기본 |
+  | C/C++ | `clangd` | kickstart 예시 주석 해제 |
+  | Rust | `rust_analyzer` | kickstart 예시 주석 해제 |
+  | Python | `pyright` | kickstart 예시 주석 해제 |
+  | Markdown | `marksman` | 추가 |
+  | TOML / JSON / YAML / Bash | `taplo` / `jsonls` / `yamlls` / `bashls` | 추가 |
+
+  목록은 `tools/patch-kickstart.lua`의 `LSP` 표에서 바꿉니다.
+
+### 출력 기록
+
+스크립트가 화면에 낸 모든 출력은 `logs/<시각>-<스크립트>.log`에도 남습니다(`install`이 부른 다른 스크립트 출력도 같은 파일에).
+설치·업데이트가 끝나면 Neovim을 직접 띄워 확인한 결과를 요약합니다: 색상 테마, 내 플러그인 로드 여부, 플러그인 목록,
+켜진 LSP별 담당 파일 형식과 설치 여부, mason 도구 목록.
 
 ## 마우스
 
@@ -186,9 +212,10 @@ kickstart.nvim/
 ├─ kickstart.ps1 / .sh            kickstart.nvim 설치·업데이트
 ├─ plugins.ps1 / .sh              overlay 설치·업데이트·제거
 ├─ bin/nvk.cmd  bin/nvk           (선택) -AppName 으로 나란히 설치했을 때의 실행기
-├─ overlay/lua/                   kickstart 설정에 복사되는 플러그인
-│  ├─ custom/plugins/hees.lua
-│  └─ hees/ (ui, menu, context, util, nes/)
+├─ overlay/                       kickstart 설정에 복사되는 플러그인
+│  ├─ plugin/hees.lua             진입점 (init.lua 다음에 자동 로드)
+│  └─ lua/hees/ (colors, ui, menu, context, util, nes/)
+├─ logs/                          (git 제외) 스크립트 출력 기록
 ├─ tools/
 │  ├─ patch-kickstart.lua         kickstart 자체 기능 켜기 (두 OS 공통, nvim -l 로 실행)
 │  ├─ sync.lua                    헤드리스로 플러그인/mason/파서 설치·업데이트 대기

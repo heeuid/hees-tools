@@ -12,7 +12,11 @@ vim.pack.add {
 -- Left click switches, middle click closes, right click opens the tab menu.
 local function close_buffer(bufnr) require('mini.bufremove').delete(bufnr, false) end
 
+-- Tab colors from Catppuccin (hees.colors loads it first); bufferline's own defaults otherwise.
+local has_ctp, ctp_bufferline = pcall(require, 'catppuccin.special.bufferline')
+
 require('bufferline').setup {
+  highlights = has_ctp and ctp_bufferline.get_theme() or nil,
   options = {
     close_command = close_buffer,
     middle_mouse_command = close_buffer,

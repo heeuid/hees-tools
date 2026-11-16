@@ -9,10 +9,36 @@ $script:Here = Split-Path -Parent $PSScriptRoot
 $script:Versions = if ($env:HEES_NVIM_VERSIONS) { $env:HEES_NVIM_VERSIONS } else { Join-Path $script:Here 'versions' }
 $script:AppNameFile = Join-Path $script:Here '.appname'
 
+# [[ Log ]]
+# Everything a script prints is also saved to logs\<time>-<script>.log next to the scripts. A script
+# called by another (install.ps1 → kickstart.ps1 …) writes into the log the outermost one opened.
+$script:OwnsLog = $false
+if (-not $env:HEES_LOG) {
+  $logs = Join-Path $script:Here 'logs'
+  New-Item -ItemType Directory -Force -Path $logs | Out-Null
+  $caller = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)
+  $env:HEES_LOG = Join-Path $logs ('{0}-{1}.log' -f (Get-Date -Format 'yyyyMMdd-HHmmss'), $caller)
+  Start-Transcript -LiteralPath $env:HEES_LOG -Append | Out-Null
+  $script:OwnsLog = $true
+}
+
+function Stop-Log {
+  if (-not $script:OwnsLog) { return }
+  $path = $env:HEES_LOG
+  $script:OwnsLog = $false
+  $env:HEES_LOG = $null
+  Stop-Transcript | Out-Null
+  Write-Host "[log] 출력 기록: $path"
+}
+
+# An uncaught error still closes the log.
+trap { Stop-Log; break }
+
 function Say([string]$Tag, [string]$Message) { Write-Host "[$Tag] $Message" }
 function Warn([string]$Tag, [string]$Message) { Write-Host "[$Tag] $Message" -ForegroundColor Yellow }
 function Fail([string]$Tag, [string]$Message) {
   Write-Host "[$Tag] 오류: $Message" -ForegroundColor Red
+  Stop-Log
   exit 1
 }
 

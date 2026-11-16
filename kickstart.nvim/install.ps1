@@ -52,4 +52,5 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 if (-not $AppName -or $AppName -eq 'nvim') { Say $Tag '끝. 새 터미널에서 nvim 으로 실행하세요.' } else { Say $Tag "끝. NVIM_APPNAME=$AppName 으로 nvim 을 실행하세요." }
 
+Stop-Log
 exit 0

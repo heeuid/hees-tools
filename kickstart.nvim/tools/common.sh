@@ -7,6 +7,16 @@ HERE=${HERE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 VERSIONS=${HEES_NVIM_VERSIONS:-$HERE/versions}
 APPNAME_FILE=$HERE/.appname
 
+# Everything a script prints is also saved to logs/<time>-<script>.log next to the scripts. A script
+# called by another (install.sh → kickstart.sh …) writes into the log the outermost one opened.
+if [ -z "${HEES_LOG:-}" ]; then
+  mkdir -p "$HERE/logs"
+  HEES_LOG=$HERE/logs/$(date +%Y%m%d-%H%M%S)-$(basename "$0" .sh).log
+  export HEES_LOG
+  exec > >(tee -a "$HEES_LOG") 2>&1
+  trap 'printf "[log] 출력 기록: %s\n" "$HEES_LOG"' EXIT
+fi
+
 say() { printf '[%s] %s\n' "$TAG" "$*"; }
 warn() { printf '\033[33m[%s] %s\033[0m\n' "$TAG" "$*" >&2; }
 fail() {

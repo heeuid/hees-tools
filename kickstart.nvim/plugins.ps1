@@ -3,15 +3,16 @@
   이 저장소의 Neovim 플러그인(overlay) 설치·업데이트·제거 (Windows).
 
 .DESCRIPTION
-  overlay\ 의 파일을 kickstart.nvim 설정 폴더에 복사합니다. kickstart 의 lua\custom\plugins\ 에 들어가므로
-  kickstart 를 업데이트해도 충돌하지 않습니다.
-    lua\custom\plugins\hees.lua   진입점 (custom.plugins 가 불러옴)
+  overlay\ 의 파일을 kickstart.nvim 설정 폴더에 복사합니다. init.lua 는 건드리지 않으므로 kickstart 를
+  어떻게 설치했든(require 'custom.plugins' 줄이 없어도) 동작하고, kickstart 를 업데이트해도 충돌하지 않습니다.
+    plugin\hees.lua               진입점 (Neovim 이 init.lua 다음에 자동으로 불러옴)
+    lua\hees\colors.lua           색상 테마 Catppuccin Latte
     lua\hees\ui.lua               bufferline(탭 클릭/가운데 클릭 닫기/우클릭 메뉴), statuscol(줄 번호 클릭 중단점)
     lua\hees\menu.lua             마우스·키보드 겸용 다단계 메뉴
     lua\hees\context.lua          우클릭 메뉴 내용 (편집기 / 탐색기 / 버퍼 탭)
     lua\hees\nes\                 NES: Claude / Codex / Gemini CLI 로 다음 편집 제안
 
-  install   파일 복사 + 필요한 플러그인(bufferline, statuscol) 설치
+  install   파일 복사 + 필요한 플러그인(catppuccin, bufferline, statuscol) 설치
   update    파일 다시 복사(이전 파일은 지움) + 그 플러그인들만 업데이트
   remove    파일과 플러그인 제거 (NES 기록·설정이 있는 data\ 는 -Purge 일 때만 삭제)
   status    설치 여부와 overlay 와의 차이
@@ -33,10 +34,11 @@ $Tag = 'plugins'
 $App = Get-AppName $AppName
 $Cfg = Get-ConfigDir $App
 $Overlay = Join-Path $Here 'overlay'
-# Plugins the overlay adds with vim.pack (kept in sync with overlay\lua\hees\ui.lua).
-$PackPlugins = @('bufferline.nvim', 'statuscol.nvim')
-# Paths the overlay owns inside the config, relative to it.
-$Owned = @('lua/hees', 'lua/custom/plugins/hees.lua')
+# Plugins the overlay adds with vim.pack (kept in sync with overlay\lua\hees\colors.lua and ui.lua).
+$PackPlugins = @('catppuccin', 'bufferline.nvim', 'statuscol.nvim')
+# Paths the overlay owns inside the config, relative to it. lua/custom/plugins/hees.lua is the old
+# entry point; it is listed so updates delete it and the overlay isn't loaded twice.
+$Owned = @('plugin/hees.lua', 'lua/hees', 'lua/custom/plugins/hees.lua')
 $Excluded = $Owned + @('data/')
 
 function Assert-Kickstart {
@@ -122,4 +124,5 @@ switch ($Command) {
   default { Get-Help $PSCommandPath -Detailed }
 }
 
+Stop-Log
 exit 0

@@ -366,4 +366,5 @@ switch ($Command) {
   default { Get-Help $PSCommandPath -Detailed }
 }
 
+Stop-Log
 exit 0

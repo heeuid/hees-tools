@@ -2,3 +2,5 @@
 versions/
 # NVIM_APPNAME chosen at install time, read by bin/nvk and the scripts
 .appname
+# Output of every script run (tools/common.ps1, tools/common.sh)
+logs/

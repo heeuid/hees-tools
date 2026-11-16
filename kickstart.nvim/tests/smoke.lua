@@ -21,7 +21,7 @@ end
 
 local function run()
   -- [[ Loading and keymaps ]]
-  for _, mod in ipairs { 'hees.ui', 'hees.nes', 'hees.context', 'hees.menu', 'bufferline', 'statuscol', 'neo-tree', 'dap' } do
+  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap' } do
     check('module loaded: ' .. mod, package.loaded[mod] ~= nil)
   end
   local function has_map(mode, lhs) return vim.fn.maparg(lhs, mode) ~= '' end
@@ -34,6 +34,11 @@ local function run()
   check('kickstart <leader>b kept', vim.fn.maparg('<Space>b', 'n', false, true).desc == 'Debug: Toggle Breakpoint')
   check('kickstart \\ (neo-tree) kept', vim.fn.maparg('\\', 'n', false, true).desc == 'NeoTree reveal')
   check(':Nes command', vim.fn.exists ':Nes' == 2)
+  check('colorscheme is catppuccin-latte', vim.g.colors_name == 'catppuccin-latte', vim.g.colors_name)
+  check('background is light', vim.o.background == 'light')
+  for _, server in ipairs { 'lua_ls', 'clangd', 'rust_analyzer', 'pyright', 'marksman', 'taplo', 'jsonls', 'yamlls', 'bashls' } do
+    check('LSP enabled: ' .. server, vim.lsp.is_enabled(server))
+  end
 
   -- [[ Menu engine ]]
   local menu = require 'hees.menu'

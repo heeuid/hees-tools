@@ -20,6 +20,34 @@ local function mason_busy()
   return false
 end
 
+--- What is actually on in this config, read from the running Neovim.
+local function report()
+  say '─── 결과 ───'
+  say('색상 테마      ' .. (vim.g.colors_name or '(기본)'))
+  say('내 플러그인    ' .. (vim.g.loaded_hees and '켜짐 (우클릭 메뉴, 클릭 탭/거터, NES)' or '없음'))
+  local plugins = vim.tbl_map(function(p) return p.spec.name end, vim.pack.get(nil, { info = false }))
+  table.sort(plugins)
+  say(('플러그인 %d개  %s'):format(#plugins, table.concat(plugins, ', ')))
+
+  local configs = vim.lsp.get_configs { enabled = true }
+  table.sort(configs, function(a, b) return a.name < b.name end)
+  say(('LSP %d개 켜짐'):format(#configs))
+  local missing = 0
+  for _, c in ipairs(configs) do
+    local cmd = type(c.cmd) == 'table' and c.cmd[1] or nil
+    local ok = cmd == nil or vim.fn.executable(cmd) == 1
+    if not ok then missing = missing + 1 end
+    say(('  %-15s %-34s %s'):format(c.name, table.concat(c.filetypes or {}, ','), ok and '설치됨' or '설치 안 됨'))
+  end
+  local has_registry, registry = pcall(require, 'mason-registry')
+  if has_registry then
+    local names = registry.get_installed_package_names()
+    table.sort(names)
+    say(('mason 도구 %d개  %s'):format(#names, table.concat(names, ', ')))
+  end
+  if missing > 0 then say(('설치 안 된 LSP %d개: 네트워크를 확인하고 다시 실행하거나 :Mason 에서 확인하세요'):format(missing)) end
+end
+
 local function main()
   if mode == 'update' then
     local names
@@ -43,6 +71,7 @@ local function main()
   vim.wait(3000)
   if mason_busy() then say 'waiting for mason installs…' end
   if not vim.wait(timeout, function() return not mason_busy() end, 1000) then say 'mason is still busy after 20 minutes; giving up' end
+  report()
   say 'done'
   vim.cmd 'qa!'
 end

@@ -44,4 +44,5 @@ Say $Tag '4/4 플러그인/LSP/파서 업데이트'
 Invoke-Sync $Tag $App 'update' ''
 Say $Tag '끝'
 
+Stop-Log
 exit 0
