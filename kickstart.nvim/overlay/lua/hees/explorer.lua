@@ -1,6 +1,7 @@
 -- Explorer (kickstart's neo-tree) behavior on top of its own setup:
 --   * In the tree the cursor is hidden in normal mode; the highlighted row (neo-tree's
---     cursorline) shows where you are. Command-line and input prompts still show the cursor.
+--     cursorline, colored from the scheme's selection color) shows where you are. Command-line
+--     and input prompts still show the cursor.
 --   * l / → : directory: expand it, or step into it if already expanded; file: open it.
 --     h / ← : collapse the directory, or the parent one from a file (neo-tree's close_node).
 -- neo-tree sets its buffer mappings itself (`l` is focus_preview there), so ours are added
@@ -34,6 +35,61 @@ end
 
 vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter', 'FileType' }, { group = group, callback = sync_cursor })
 vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = show_cursor })
+
+-- [[ Row highlight ]]
+-- With the cursor hidden, the row highlight is the only position marker, and many colorschemes
+-- keep CursorLine (which neo-tree's NeoTreeCursorLine links to) nearly invisible on purpose.
+-- Use the scheme's own selection color instead: every scheme makes Visual readable on its
+-- background. Schemes that select with `reverse` start from Normal's background with 18% of its
+-- text color mixed in. If the row is still too close to the background (luminance contrast under
+-- 1.5, e.g. pale yellow on white), more text color is mixed in, as long as the text on it keeps a
+-- contrast of 4.5. Recomputed on every colorscheme change.
+
+local function hl(name) return vim.api.nvim_get_hl(0, { name = name, link = false }) end
+
+local function mix(a, b, t)
+  local out = 0
+  for shift = 16, 0, -8 do
+    local ca, cb = math.floor(a / 2 ^ shift) % 256, math.floor(b / 2 ^ shift) % 256
+    out = out * 256 + math.floor(ca + (cb - ca) * t + 0.5)
+  end
+  return out
+end
+
+-- WCAG relative luminance and contrast ratio of 0xRRGGBB colors.
+local function luminance(c)
+  local sum = 0
+  for i, weight in ipairs { 0.2126, 0.7152, 0.0722 } do
+    local v = (math.floor(c / 2 ^ (24 - 8 * i)) % 256) / 255
+    sum = sum + weight * (v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4)
+  end
+  return sum
+end
+
+local function contrast(a, b)
+  local la, lb = luminance(a), luminance(b)
+  return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05)
+end
+
+local function set_row_highlight()
+  local visual, normal = hl 'Visual', hl 'Normal'
+  local light = vim.o.background == 'light'
+  local base = normal.bg or (light and 0xffffff or 0x000000)
+  local text = normal.fg or (light and 0x000000 or 0xffffff)
+  local bg = (visual.bg and not visual.reverse) and visual.bg or mix(base, text, 0.18)
+  local t = 0
+  while contrast(bg, base) < 1.5 and t < 0.5 do
+    t = t + 0.05
+    local next_bg = mix(bg, text, t)
+    if contrast(next_bg, text) < 4.5 then break end
+    bg = next_bg
+  end
+  vim.api.nvim_set_hl(0, 'NeoTreeCursorLine', { bg = bg, bold = true })
+end
+
+set_row_highlight()
+-- Scheduled so it runs after neo-tree re-creates its own groups for the new scheme.
+vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = function() vim.schedule(set_row_highlight) end })
 
 -- [[ h / l ]]
 
