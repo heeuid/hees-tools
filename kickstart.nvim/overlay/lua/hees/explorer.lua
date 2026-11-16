@@ -10,31 +10,25 @@
 local group = vim.api.nvim_create_augroup('hees-explorer', { clear = true })
 
 -- [[ Hidden cursor ]]
+-- Hidden only while the current window is a neo-tree tree (not its popups); everywhere else the
+-- cursor is shown. Rechecked on window/buffer changes and whenever Neovim goes idle (SafeState),
+-- which also covers neo-tree switching windows with autocommands turned off. While the
+-- right-click menu is focused it owns the cursor (hees.util tracks both reasons).
 
-local saved_guicursor
-
-local function hide_cursor()
-  if saved_guicursor then return end
-  saved_guicursor = vim.o.guicursor
-  vim.o.guicursor = saved_guicursor .. ',n:HeesHiddenCursor'
-end
-
-local function show_cursor()
-  if not saved_guicursor then return end
-  vim.o.guicursor = saved_guicursor
-  saved_guicursor = nil
-end
+local util = require 'hees.util'
 
 local function sync_cursor()
-  if vim.bo.filetype == 'neo-tree' and vim.api.nvim_win_get_config(0).relative == '' then
-    hide_cursor()
+  local ft = vim.bo.filetype
+  if ft == 'hees-menu' then return end
+  if ft == 'neo-tree' and vim.api.nvim_win_get_config(0).relative == '' then
+    util.hide_cursor('explorer', 'n')
   else
-    show_cursor()
+    util.show_cursor 'explorer'
   end
 end
 
-vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter', 'FileType' }, { group = group, callback = sync_cursor })
-vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = show_cursor })
+vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter', 'FileType', 'SafeState' }, { group = group, callback = sync_cursor })
+vim.api.nvim_create_autocmd('VimLeavePre', { group = group, callback = function() util.show_cursor 'explorer' end })
 
 -- [[ Row highlight ]]
 -- With the cursor hidden, the row highlight is the only position marker, and many colorschemes

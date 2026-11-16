@@ -28,7 +28,7 @@ local group = vim.api.nvim_create_augroup('hees-menu', { clear = true })
 ---@field width integer content width
 ---@field child_of integer? index of the parent item this level hangs off
 
----@type { levels: hees.MenuLevel[], origin: table?, guicursor: string? }
+---@type { levels: hees.MenuLevel[], origin: table? }
 local state = { levels = {} }
 
 local function is_enabled(item)
@@ -115,17 +115,9 @@ local function first_enabled(items, from, step)
   end
 end
 
-local function hide_cursor()
-  if state.guicursor then return end
-  state.guicursor = vim.o.guicursor
-  vim.o.guicursor = 'a:HeesHiddenCursor'
-end
+local function hide_cursor() util.hide_cursor('menu', 'a') end
 
-local function restore_cursor()
-  if not state.guicursor then return end
-  vim.o.guicursor = state.guicursor
-  state.guicursor = nil
-end
+local function restore_cursor() util.show_cursor 'menu' end
 
 --- Close levels deeper than `depth` (0 closes everything).
 local function close_from(depth)

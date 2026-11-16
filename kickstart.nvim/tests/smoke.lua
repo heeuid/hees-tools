@@ -192,6 +192,15 @@ local function run()
     vim.wait(2000, function() return vim.api.nvim_buf_get_name(0):find('a.txt', 1, true) ~= nil end)
     check('explorer: l on a file opens it in an editor window', vim.api.nvim_buf_get_name(0):find('a.txt', 1, true) ~= nil and vim.bo.filetype ~= 'neo-tree')
     check('explorer: cursor shown again outside the tree', vim.o.guicursor:find('HeesHiddenCursor', 1, true) == nil, vim.o.guicursor)
+    -- Using the right-click menu inside the tree must not leave the cursor hidden everywhere.
+    local editor_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_set_current_win(tree)
+    ctx.open_at_cursor(false)
+    feed '<Esc>'
+    check('explorer: back in the tree after the menu, cursor hidden', vim.bo.filetype == 'neo-tree' and vim.o.guicursor:find('n:HeesHiddenCursor', 1, true) ~= nil, vim.o.guicursor)
+    vim.api.nvim_set_current_win(editor_win)
+    pcall(vim.api.nvim_exec_autocmds, 'SafeState', {})
+    check('explorer: cursor shown in the editor after using the menu in the tree', vim.o.guicursor:find('HeesHiddenCursor', 1, true) == nil, vim.o.guicursor)
     if vim.api.nvim_buf_is_valid(tbuf) then vim.cmd 'Neotree close' end
     vim.cmd.cd(cwd)
     vim.api.nvim_set_current_buf(buf)

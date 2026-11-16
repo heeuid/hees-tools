@@ -64,6 +64,47 @@ local plain = {
 ---@return table
 function M.icons() return vim.g.have_nerd_font and nerd or plain end
 
+-- [[ Hidden cursor ]]
+-- The menu (all modes) and the explorer (normal mode in the tree) hide the cursor for their own
+-- reasons. 'guicursor' is global, so they share one owner: the user's value is saved once when
+-- the first reason appears and put back when the last one goes, whatever order they come in.
+
+local cursor = { base = nil, reasons = {} } ---@type { base: string?, reasons: table<string, string> }
+
+local function apply_cursor()
+  if next(cursor.reasons) == nil then
+    if cursor.base then vim.o.guicursor = cursor.base end
+    cursor.base = nil
+    return
+  end
+  cursor.base = cursor.base or vim.o.guicursor
+  local spec = cursor.base
+  for _, modes in pairs(cursor.reasons) do
+    spec = spec .. ',' .. modes .. ':HeesHiddenCursor'
+  end
+  if vim.o.guicursor ~= spec then vim.o.guicursor = spec end
+end
+
+--- Hide the cursor in `modes` ('a' = all, 'n' = normal, ...) for `reason`.
+---@param reason string
+---@param modes string
+function M.hide_cursor(reason, modes)
+  if cursor.reasons[reason] == modes then return end
+  cursor.reasons[reason] = modes
+  apply_cursor()
+end
+
+--- Drop `reason`; the cursor comes back when no reason is left.
+---@param reason string
+function M.show_cursor(reason)
+  if cursor.reasons[reason] == nil then return end
+  cursor.reasons[reason] = nil
+  apply_cursor()
+end
+
+--- Reasons currently hiding the cursor (for tests).
+function M.cursor_hidden_by() return vim.tbl_keys(cursor.reasons) end
+
 --- Pretty-print a key sequence for menus: '<leader>sf' -> 'Space s f'.
 ---@param keys string?
 ---@return string?
