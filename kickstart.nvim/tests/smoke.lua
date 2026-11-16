@@ -86,7 +86,7 @@ local function run()
   local top = ctx._buffer_items(false)
   local labels = vim.tbl_map(function(it) return it.label or '---' end, top)
   check('buffer menu has LSP/Debug/AI/Git/Search groups', vim.tbl_contains(labels, 'LSP') and vim.tbl_contains(labels, 'Debug') and vim.tbl_contains(labels, 'AI'), table.concat(labels, ', '))
-  check('buffer menu top level is short (<= 14 rows)', #top <= 14, #top)
+  check('buffer menu top level is short (<= 16 rows)', #top <= 16, #top)
   ctx.open_at_cursor(false)
   check('context menu opens from keyboard', menu.is_open())
   local rendered = vim.api.nvim_buf_get_lines(0, 0, -1, false)
@@ -367,6 +367,9 @@ local function run()
     return type(lsp.items) == 'function' and lsp.items() or lsp.items
   end)() or {})[1]
   local structure_labels = structure and vim.tbl_map(function(it) return it.label or '---' end, structure.items) or {}
+  local items_now = vim.tbl_map(function(it) return it.label or '---' end, ctx._buffer_items(false))
+  check('right double clicks open the same menu (not the built-in PopUp)', vim.fn.maparg('<2-RightMouse>', 'n') ~= '' and vim.fn.maparg('<2-RightMouse>', 'x') ~= '' and vim.fn.maparg('<3-RightMouse>', 'i') ~= '')
+  check('editor menu: Go back / Go forward under Go to definition', vim.tbl_contains(items_now, 'Go back') and vim.tbl_contains(items_now, 'Go forward') and vim.fn.maparg('<X1Mouse>', 'n') ~= '', table.concat(items_now, ' | '))
   check('LSP menu: Structure has outline, call and type hierarchy', vim.tbl_contains(structure_labels, 'Outline sidebar') and vim.tbl_contains(structure_labels, 'Call hierarchy') and vim.tbl_contains(structure_labels, 'Type hierarchy'), table.concat(structure_labels, ' | '))
 
   local analyze = require 'hees.ai.analyze'
@@ -380,14 +383,49 @@ local function run()
   check('analyze: prompt has task, code and LSP sections', last.prompt:find('Review this code', 1, true) and last.prompt:find('11|     sum = add(sum, n)', 1, true) and last.prompt:find('## LSP hover at the cursor', 1, true) and last.prompt:find('## Definition of the symbol under the cursor', 1, true) and last.prompt:find('Answer in Korean', 1, true), last.prompt)
   local answer_buf
   for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w)):find('AI analysis', 1, true) then answer_buf = vim.api.nvim_win_get_buf(w) end
+    if vim.b[vim.api.nvim_win_get_buf(w)].hees_ai_conv then answer_buf = vim.api.nvim_win_get_buf(w) end
   end
   local answer_text = answer_buf and table.concat(vim.api.nvim_buf_get_lines(answer_buf, 0, -1, false), '\n') or ''
   check('analyze: answer window shows the reply', answer_text:find('ECHO', 1, true) ~= nil and answer_text:find('# Review', 1, true) ~= nil, answer_text)
+
+  -- [[ Follow-up questions ]]
+  local conversation = require 'hees.ai.conversation'
+  check('follow-up: first request belongs to a conversation (turn 1)', last.conv ~= nil and last.turn == 1, vim.inspect { last.conv, last.turn })
+  require('hees.ai.backends').build = function(_, _, p) return { argv = echo_argv, stdin = p } end
+  conversation.follow_up(nil, 'total 이 빈 테이블이면?')
+  vim.wait(15000, function() return not analyze.is_busy() end)
+  local fu = ai_log.all(1)[1]
+  check('follow-up: same conversation, turn 2, same task', fu.conv == last.conv and fu.turn == 2 and fu.task == 'review' and fu.question == 'total 이 빈 테이블이면?', vim.inspect { fu.conv, fu.turn, fu.task })
+  check('follow-up: prompt resends code, answer so far and the question', fu.prompt:find('11|     sum = add(sum, n)', 1, true) and fu.prompt:find('## Conversation so far', 1, true) and fu.prompt:find('ECHO', 1, true) and fu.prompt:find('## Follow-up question\ntotal 이 빈 테이블이면?', 1, true), fu.prompt)
+  answer_text = table.concat(vim.api.nvim_buf_get_lines(answer_buf, 0, -1, false), '\n')
+  check('follow-up: answer window keeps Q1 and adds Q2', answer_text:find('## Q1: Review', 1, true) and answer_text:find('## Q2: total 이 빈 테이블이면?', 1, true), answer_text)
+  check('follow-up: a in the answer window, <leader>af and <leader>aF mapped', #vim.tbl_filter(function(m) return m.lhs == 'a' end, vim.api.nvim_buf_get_keymap(answer_buf, 'n')) == 1 and vim.fn.maparg('<Space>af', 'n') ~= '' and vim.fn.maparg('<Space>aF', 'n') ~= '')
+  -- Long conversations leave out the oldest answers.
+  local conv_obj = conversation._get(last.conv)
+  local keep_max = conversation.config.max_chars
+  conversation.config.max_chars = #conv_obj.base_prompt + 20
+  table.insert(conv_obj.turns, { question = 'x', status = 'running' })
+  local short_prompt, dropped = conversation._followup_prompt(conv_obj, 'x')
+  table.remove(conv_obj.turns)
+  conversation.config.max_chars = keep_max
+  check('follow-up: oldest answers left out when the prompt gets long', dropped >= 1 and short_prompt:find('earlier answer left out', 1, true) ~= nil, tostring(dropped))
+  -- Rebuilt from the log (as in a later session).
+  conversation._forget()
+  check('follow-up: conversation rebuilt from the log', #conversation._get(last.conv).turns == 2 and conversation.last_id() == last.conv)
+  local listed = vim.tbl_filter(function(c) return c.id == last.conv end, conversation.list())[1]
+  check('conversations: listed once with 2 questions', listed and listed.count == 2 and listed.task == 'review', vim.inspect(listed))
+  local viewer = require 'hees.ai.viewer'
+  viewer.open { conversations = true }
+  local vlines = vim.api.nvim_buf_get_lines(viewer._view().list_buf, 0, -1, false)
+  check('conversations view: one row per conversation, transcript on the right', vlines[1]:find('AI conversations', 1, true) and table.concat(vim.api.nvim_buf_get_lines(viewer._view().detail_buf, 0, -1, false), '\n'):find('## Q2: total', 1, true), table.concat(vlines, '\n'))
+  vim.api.nvim_feedkeys('g', 'x', false)
+  check('log viewer: g switches back to requests', vim.api.nvim_buf_get_lines(viewer._view().list_buf, 0, 1, false)[1]:find('AI requests', 1, true) ~= nil)
+  vim.cmd 'tabclose'
+  require('hees.ai.backends').build = real_build
   vim.cmd 'only'
   local ai_items = require('hees.ai').menu_items(false)
   local ai_labels = vim.tbl_map(function(it) return it.label or '---' end, ai_items)
-  check('AI menu has next edit, analysis, backend, models, log', vim.tbl_contains(ai_labels, 'Suggest next edit') and vim.tbl_contains(ai_labels, 'Explain function at cursor') and vim.tbl_contains(ai_labels, 'Request log') and #ai_items <= 15, table.concat(ai_labels, ' | '))
+  check('AI menu has next edit, analysis, backend, models, log', vim.tbl_contains(ai_labels, 'Suggest next edit') and vim.tbl_contains(ai_labels, 'Explain function at cursor') and vim.tbl_contains(ai_labels, 'Request log') and vim.tbl_contains(ai_labels, 'Follow-up question…') and #ai_items <= 18, table.concat(ai_labels, ' | '))
   vim.api.nvim_set_current_buf(buf)
 
   -- [[ Per-task backends and models ]]

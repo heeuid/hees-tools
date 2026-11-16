@@ -179,12 +179,11 @@ function M.run(opts)
   if not ctx then return vim.notify('AI debug: ' .. err, vim.log.levels.WARN) end
   local where = ('%s:%d'):format(rel(ctx.path), ctx.line)
   analyze.show_status { '# Debug state · ' .. where, '', '_디버거 상태 수집 완료, 요청 준비 중…_' }
-  local header = { '# Debug state · ' .. where, ('stopped: %s · in %s · %d frames'):format(ctx.reason, ctx.frame, #ctx.stack) }
-  if opts.question then table.insert(header, '> ' .. opts.question) end
   analyze.ask_ai('debug', {
     title = 'Debug ' .. where,
-    header = header,
+    header = { '# Debug state · ' .. where, ('stopped: %s · in %s · %d frames'):format(ctx.reason, ctx.frame, #ctx.stack) },
     prompt = M.build_prompt(ctx, opts.question),
+    question = opts.question,
     meta = { file = rel(ctx.path), range = { ctx.line, ctx.line } },
   })
 end

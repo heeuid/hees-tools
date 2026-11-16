@@ -245,9 +245,18 @@ local function back()
 end
 
 --- Replay a click that landed outside the menu so it still does what the user meant.
+--- A replayed press comes right after the real one at the same spot, so Neovim counts it as a
+--- double click: a left click in text just moves the cursor instead, and right double clicks are
+--- mapped like single ones (hees.context), so the built-in PopUp menu never shows.
 local function replay(button, mp)
   M.close()
   if mp.screenrow < 1 then return end
+  local win = mp.winid
+  if button == 'left' and win ~= 0 and mp.line > 0 and vim.api.nvim_win_get_config(win).relative == '' and mp.wincol > vim.fn.getwininfo(win)[1].textoff then
+    vim.api.nvim_set_current_win(win)
+    pcall(vim.api.nvim_win_set_cursor, win, { mp.line, math.max(mp.column - 1, 0) })
+    return
+  end
   vim.schedule(function() vim.api.nvim_input_mouse(button, 'press', '', 0, mp.screenrow - 1, mp.screencol - 1) end)
 end
 
@@ -290,9 +299,9 @@ map_keys = function(buf)
   map({ 'h', '<Left>', '<BS>' }, back)
   map({ '<Esc>', 'q', '<C-c>' }, M.close)
   map({ '<LeftMouse>', '<2-LeftMouse>' }, function() on_click 'left' end)
-  map('<RightMouse>', function() on_click 'right' end)
+  map({ '<RightMouse>', '<2-RightMouse>', '<3-RightMouse>', '<4-RightMouse>' }, function() on_click 'right' end)
   map('<MiddleMouse>', function() on_click 'middle' end)
-  map({ '<LeftRelease>', '<RightRelease>', '<MiddleRelease>', '<LeftDrag>', '<RightDrag>' }, '<Nop>')
+  map({ '<LeftRelease>', '<RightRelease>', '<2-RightRelease>', '<3-RightRelease>', '<4-RightRelease>', '<MiddleRelease>', '<LeftDrag>', '<RightDrag>' }, '<Nop>')
   map('<MouseMove>', on_hover)
 end
 

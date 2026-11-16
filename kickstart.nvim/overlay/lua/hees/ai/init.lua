@@ -5,6 +5,7 @@
 
 local analyze = require 'hees.ai.analyze'
 local backends = require 'hees.ai.backends'
+local conversation = require 'hees.ai.conversation'
 local ai_debug = require 'hees.ai.debug'
 local nes = require 'hees.nes'
 local settings = require 'hees.ai.settings'
@@ -126,11 +127,13 @@ function M.menu_items(visual)
     { label = 'Review ' .. scope .. ' for bugs', hint = '<leader>ar', action = task 'review' },
     { label = 'Ask about ' .. scope .. '…', hint = '<leader>aq', action = task 'ask' },
     { label = 'Debug state', hint = '<leader>ag', items = M.debug_items, enabled = ai_debug.is_stopped },
+    { label = 'Follow-up question…', hint = '<leader>af', action = function() conversation.follow_up() end, enabled = function() return conversation.last_id() ~= nil end },
+    { label = 'Conversations', hint = '<leader>aF', action = function() viewer.open { conversations = true } end },
     { label = 'Cancel running request', hint = '<leader>ac', action = M.cancel, enabled = function() return nes.is_busy() or analyze.is_busy() end },
     { sep = true },
     { label = 'Backends & models', hint = '<leader>as', items = settings_items },
     { label = 'Auto next-edit suggest', hint = '<leader>at', checked = settings.auto(), action = function() settings.set_auto() end },
-    { label = 'Request log', hint = '<leader>al', action = viewer.open },
+    { label = 'Request log', hint = '<leader>al', action = function() viewer.open() end },
   })
 end
 
@@ -160,7 +163,9 @@ local subcommands = {
   ask = function(rest) analyze.run('ask', { question = rest ~= '' and rest or nil }) end,
   debug = function(rest) ai_debug.run { question = rest ~= '' and rest or nil } end,
   cancel = M.cancel,
-  log = viewer.open,
+  log = function() viewer.open() end,
+  follow = function(rest) conversation.follow_up(nil, rest ~= '' and rest or nil) end,
+  conversations = function() viewer.open { conversations = true } end,
   task = task_command,
   backend = function(arg)
     if arg ~= '' then return settings.set_backend(arg) end
@@ -227,7 +232,9 @@ function M.setup(opts)
   vim.keymap.set('n', '<leader>am', M.pick_model, { desc = 'AI: [M]odel of a task' })
   vim.keymap.set('n', '<leader>as', M.open_settings, { desc = 'AI: backends & models [S]ettings menu' })
   vim.keymap.set('n', '<leader>at', function() settings.set_auto() end, { desc = 'AI: [T]oggle auto suggest' })
-  vim.keymap.set('n', '<leader>al', viewer.open, { desc = 'AI: request [L]og' })
+  vim.keymap.set('n', '<leader>al', function() viewer.open { conversations = false } end, { desc = 'AI: request [L]og' })
+  vim.keymap.set('n', '<leader>af', function() conversation.follow_up() end, { desc = 'AI: [F]ollow-up question (latest conversation)' })
+  vim.keymap.set('n', '<leader>aF', function() viewer.open { conversations = true } end, { desc = 'AI: conversations to [F]ollow up' })
   local has_wk, wk = pcall(require, 'which-key')
   if has_wk then wk.add { { '<leader>a', group = '[A]I', mode = { 'n', 'x' } } } end
 end

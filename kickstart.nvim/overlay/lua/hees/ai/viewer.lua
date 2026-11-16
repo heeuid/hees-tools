@@ -3,16 +3,22 @@
 -- directory, the prompt sent on stdin, the reply, stderr, exit code and timing. Running requests
 -- appear at once and update when they finish.
 --
--- List keys: j/k or click to move, <CR>/l to jump into the record, r refresh, y yank the
--- command, Y yank the reply, o open the raw JSONL file, q close.
+-- `g` switches to conversations: one row per explain/review/ask/debug conversation (follow-up
+-- questions grouped), with its questions and answers on the right; `c` continues the selected
+-- conversation with a follow-up question (in either view).
+--
+-- List keys: j/k or click to move, <CR>/l to jump into the record, g requests/conversations,
+-- c follow-up question, r refresh, y yank the command, Y yank the reply, o open the raw JSONL
+-- file, q close.
 
+local conversation = require 'hees.ai.conversation'
 local log = require 'hees.ai.log'
 
 local M = {}
 
 M.days = 7 -- how many days of log files to show
 
-local view ---@type { tab: integer, list_win: integer, list_buf: integer, detail_win: integer, detail_buf: integer, entries: table[], shown: string? }?
+local view ---@type { tab: integer, list_win: integer, list_buf: integer, detail_win: integer, detail_buf: integer, entries: table[], shown: string?, conversations: boolean? }?
 local ns = vim.api.nvim_create_namespace 'hees.ai.viewer'
 
 local STATUS = {
@@ -83,28 +89,45 @@ end
 local function show_selected(force)
   local e = selected()
   if not e then return end
-  local key = e.uid .. (e.status or '')
+  local key = view.conversations and (e.id .. e.count .. e.answered) or (e.uid .. (e.status or ''))
   if not force and view.shown == key then return end
   view.shown = key
-  set_lines(view.detail_buf, detail_lines(e))
+  set_lines(view.detail_buf, view.conversations and conversation.transcript(e.id) or detail_lines(e))
   pcall(vim.api.nvim_win_set_cursor, view.detail_win, { 1, 0 })
 end
 
 function M.refresh()
   if not valid() then return end
   local keep = selected()
-  view.entries = log.all(M.days)
-  local lines = { ('AI requests — %d (last %d days)   <CR> open · r refresh · y command · Y reply · o file · q close'):format(#view.entries, M.days) }
-  for _, e in ipairs(view.entries) do
-    local mark = STATUS[e.status] or FAILED
-    table.insert(lines, ('%s %s  %-7s %-24s %7s  %s'):format(
-      mark[1],
-      os.date('%m-%d %H:%M:%S', e.time or 0),
-      e.task or e.kind or '?',
-      (e.backend or '?') .. (e.model and ('/' .. e.model) or ''),
-      e.elapsed and ('%.1fs'):format(e.elapsed) or '',
-      e.title or ''
-    ))
+  local lines
+  if view.conversations then
+    view.entries = conversation.list()
+    lines = { ('AI conversations — %d   c 후속 질문 · g 요청 목록 · <CR> 보기 · r refresh · q close'):format(#view.entries) }
+    for _, c in ipairs(view.entries) do
+      c.status = c.answered > 0 and 'ok' or 'failed'
+      table.insert(lines, ('%s %s  %-7s %-24s %2d Q  %s'):format(
+        (STATUS[c.status] or FAILED)[1],
+        os.date('%m-%d %H:%M:%S', c.time or 0),
+        c.task or '?',
+        (c.backend or '?') .. (c.model and ('/' .. c.model) or ''),
+        c.count,
+        c.title or ''
+      ))
+    end
+  else
+    view.entries = log.all(M.days)
+    lines = { ('AI requests — %d (last %d days)   <CR> open · g conversations · c follow-up · r refresh · y command · Y reply · o file · q close'):format(#view.entries, M.days) }
+    for _, e in ipairs(view.entries) do
+      local mark = STATUS[e.status] or FAILED
+      table.insert(lines, ('%s %s  %-7s %-24s %7s  %s'):format(
+        mark[1],
+        os.date('%m-%d %H:%M:%S', e.time or 0),
+        e.task or e.kind or '?',
+        (e.backend or '?') .. (e.model and ('/' .. e.model) or ''),
+        e.elapsed and ('%.1fs'):format(e.elapsed) or '',
+        e.title or ''
+      ))
+    end
   end
   set_lines(view.list_buf, lines)
   vim.api.nvim_buf_clear_namespace(view.list_buf, ns, 0, -1)
@@ -116,7 +139,7 @@ function M.refresh()
   local row = 2
   if keep then
     for i, e in ipairs(view.entries) do
-      if e.uid == keep.uid then row = i + 1 end
+      if (e.uid and e.uid == keep.uid) or (e.id and e.id == keep.id) then row = i + 1 end
     end
   end
   pcall(vim.api.nvim_win_set_cursor, view.list_win, { math.min(row, #lines), 0 })
@@ -134,9 +157,13 @@ local function yank(text, what)
   vim.notify('AI log: copied ' .. what)
 end
 
-function M.open()
+--- Open the viewer (or go to it).
+---@param opts { conversations: boolean? }? start in the conversations view
+function M.open(opts)
+  opts = opts or {}
   if valid() then
     vim.api.nvim_set_current_tabpage(view.tab)
+    if opts.conversations ~= nil then view.conversations = opts.conversations end
     return M.refresh()
   end
   vim.cmd 'tabnew'
@@ -161,13 +188,25 @@ function M.open()
   vim.wo[list_win].cursorline = true
   vim.wo[list_win].number = false
 
-  view = { tab = tab, list_win = list_win, list_buf = list_buf, detail_win = detail_win, detail_buf = detail_buf, entries = {} }
+  view = { tab = tab, list_win = list_win, list_buf = list_buf, detail_win = detail_win, detail_buf = detail_buf, entries = {}, conversations = opts.conversations }
 
   local function map(buf, lhs, fn) vim.keymap.set('n', lhs, fn, { buffer = buf, nowait = true, silent = true }) end
   for _, buf in ipairs { list_buf, detail_buf } do
     map(buf, 'q', close)
   end
   map(list_buf, 'r', M.refresh)
+  map(list_buf, 'g', function()
+    view.conversations = not view.conversations
+    view.shown = nil
+    M.refresh()
+  end)
+  map(list_buf, 'c', function()
+    local e = selected()
+    local id = e and (view.conversations and e.id or e.conv)
+    if not id then return vim.notify('AI: 이 요청은 대화가 아닙니다 (다음 편집 제안 등)', vim.log.levels.WARN) end
+    close()
+    conversation.follow_up(id)
+  end)
   map(list_buf, '<CR>', function() vim.api.nvim_set_current_win(view.detail_win) end)
   map(list_buf, 'l', function() vim.api.nvim_set_current_win(view.detail_win) end)
   map(detail_buf, 'h', function() vim.api.nvim_set_current_win(view.list_win) end)

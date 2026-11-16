@@ -203,6 +203,16 @@ local function window_items()
   }
 end
 
+--- Whether the jump list has an older (-1) or newer (1) position than the current one.
+local function can_jump(dir)
+  local list, idx = unpack(vim.fn.getjumplist())
+  if dir < 0 then return idx > 0 end
+  return idx < #list - 1
+end
+
+--- <C-o> / <C-i> without depending on how the terminal sends <C-i> (it is <Tab> in most).
+local function jump(dir) vim.cmd.execute(dir < 0 and [["normal! \<C-o>"]] or [["normal! \<C-i>"]]) end
+
 local function buffer_items(visual)
   local file = vim.api.nvim_buf_get_name(0)
   local editable = vim.bo.modifiable
@@ -243,6 +253,8 @@ local function buffer_items(visual)
     sep,
     { label = 'Go to definition', hint = 'grd', action = 'grd', enabled = lsp_supports 'textDocument/definition' },
     { label = 'Find references', hint = 'grr', action = 'grr', enabled = lsp_supports 'textDocument/references' },
+    { label = 'Go back', hint = '<C-o>', action = function() jump(-1) end, enabled = can_jump(-1) },
+    { label = 'Go forward', hint = '<C-i>', action = function() jump(1) end, enabled = can_jump(1) },
     sep,
   }, groups)
 end
@@ -379,12 +391,19 @@ local function from_visual(fn)
 end
 
 function M.setup()
-  vim.keymap.set('n', '<RightMouse>', function() M.open_at_mouse(false) end, { desc = 'Context menu' })
-  vim.keymap.set('x', '<RightMouse>', from_visual(M.open_at_mouse), { desc = 'Context menu' })
-  vim.keymap.set('i', '<RightMouse>', function()
-    vim.cmd.stopinsert()
-    vim.schedule(function() M.open_at_mouse(false) end)
-  end, { desc = 'Context menu' })
+  -- Fast repeated right clicks arrive as <2-RightMouse> …; they open the same menu, otherwise
+  -- Neovim's built-in PopUp menu would show.
+  for _, lhs in ipairs { '<RightMouse>', '<2-RightMouse>', '<3-RightMouse>', '<4-RightMouse>' } do
+    vim.keymap.set('n', lhs, function() M.open_at_mouse(false) end, { desc = 'Context menu' })
+    vim.keymap.set('x', lhs, from_visual(M.open_at_mouse), { desc = 'Context menu' })
+    vim.keymap.set('i', lhs, function()
+      vim.cmd.stopinsert()
+      vim.schedule(function() M.open_at_mouse(false) end)
+    end, { desc = 'Context menu' })
+  end
+  -- Mouse back/forward side buttons walk the jump list, like a browser (no default in Neovim).
+  vim.keymap.set('n', '<X1Mouse>', function() jump(-1) end, { desc = 'Go back (jump list)' })
+  vim.keymap.set('n', '<X2Mouse>', function() jump(1) end, { desc = 'Go forward (jump list)' })
   for _, lhs in ipairs { '<leader>m', '<S-F10>' } do
     vim.keymap.set('n', lhs, function() M.open_at_cursor(false) end, { desc = 'Context [M]enu' })
     vim.keymap.set('x', lhs, from_visual(M.open_at_cursor), { desc = 'Context [M]enu' })

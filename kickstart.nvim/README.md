@@ -147,6 +147,8 @@ kickstart의 `git status`에 나타나지 않습니다.
 | 탐색기 | 열기 (더블클릭) | — | 파일 메뉴 (Open in ▸ 창 골라서/세로 분할/가로 분할/새 탭, 새 파일/폴더, 이름 변경, 삭제, 복사/잘라내기/붙여넣기, 경로, 시스템 탐색기) |
 | 디버그 UI | 제어 버튼 (dap-ui) | — | — |
 
+마우스 옆 버튼(뒤로/앞으로)은 이동 기록을 따라 갑니다: 정의로 간 뒤(`grd`) **뒤로** 버튼이 `<C-o>`, **앞으로**가 `<C-i>`.
+
 거터(줄 번호·git·진단·접기 열) 클릭은 [statuscol.nvim](https://github.com/luukvbaal/statuscol.nvim)의 기본 동작입니다.
 
 ### 탐색기에서 원하는 창에 열기
@@ -179,16 +181,21 @@ kickstart의 `git status`에 나타나지 않습니다.
   ─────────                      Format buffer    Terminate
   Go to definition grd           Hover            Step           ▸
   Find references  grr           ─────            ─────
-  ─────────                      Go to        ▸   Toggle breakpoint Space b
-  LSP            ▸               Symbols      ▸   Breakpoints    ▸
-  Debug          ▸               Diagnostics  ▸   ─────
-  AI             ▸               ─────            Toggle debug UI  F7
-  Git            ▸               Inlay hints      Toggle REPL
-  Search         ▸               Restart LSP
-  ─────────                      LSP health
+  Go back        C-o             Go to        ▸   Toggle breakpoint Space b
+  Go forward     C-i             Structure    ▸   Breakpoints    ▸
+  ─────────                      Diagnostics  ▸   ─────
+  LSP            ▸               ─────            Toggle debug UI  F7
+  Debug          ▸               Inlay hints      Toggle REPL
+  AI             ▸               Restart LSP
+  Git            ▸               LSP health
+  Search         ▸
+  ─────────
   Window         ▸
   File           ▸
 ```
+
+**Go back / Go forward**는 Neovim 이동 기록(jump list)의 `<C-o>` / `<C-i>`입니다. 정의로 가기, 참조·검색 결과로 가기, `G`·`%` 같은
+큰 이동이 기록되고, 돌아갈 곳이 없으면 흐리게 표시됩니다.
 
 **Window ▸** 로 편집 창을 마우스로 나누고 정리합니다. 항목마다 Neovim 기본 창 명령을 그대로 실행합니다.
 
@@ -234,7 +241,7 @@ kickstart의 `git status`에 나타나지 않습니다.
 - **대상**: 비주얼 모드면 선택 영역, 아니면 LSP 문서 심볼로 찾은 **커서가 있는 함수(없으면 클래스)**, 그것도 없으면 커서 주변 ±30줄.
 - **함께 보내는 LSP 정보**: 붙어 있는 서버, 그 범위의 진단(오류·경고), 커서 위치의 hover(타입·문서), 커서 아래 심볼의 정의 위치와 그 소스,
   참조 위치, 파일의 심볼 개요. 각 요청은 1.5초 안에 답이 없으면 빼고 보냅니다.
-- **답**: 오른쪽 Markdown 창에 표시됩니다(`q`로 닫기). 기본으로 한국어로 답하게 합니다.
+- **답**: 오른쪽 Markdown 창에 표시됩니다(`q`로 닫기). 기본으로 한국어로 답하게 합니다. 요청마다 새 대화(새 버퍼)가 되고, 이전 대화는 지워지지 않습니다.
 - `:Ai explain` / `:Ai review` / `:Ai ask 질문` (범위를 주면 `:10,30Ai review`처럼 그 줄들).
 
 ### 디버그 상태 분석 (`<Space>ag`)
@@ -246,6 +253,25 @@ kickstart의 `git status`에 나타나지 않습니다.
 - **묻는 것**: 왜 여기서 멈췄는지, 이상해 보이는 값, 버그의 원인 후보, 다음에 확인할 것. 원하면 질문을 직접 입력할 수 있습니다.
 - 키 `<Space>ag`, 우클릭 **AI ▸ Debug state ▸** 또는 **Debug ▸ Ask AI ▸**, `:Ai debug [질문]`. 멈춘 상태가 아니면 메뉴가 흐리게 표시됩니다.
 - 답은 코드 분석과 같은 오른쪽 창에 나옵니다.
+
+### 이어서 질문하기 (후속 질문)
+
+분석·디버그 답은 **대화**가 되어, 같은 맥락에서 계속 물을 수 있습니다.
+
+| 어디서 | 키 | 어느 대화로 |
+|---|---|---|
+| 답 창 | `a` | 그 창의 대화 |
+| 코드 창 | `<Space>af` (AI ▸ Follow-up question…) | **가장 최근** 대화. 입력칸에 `후속 질문 → [Review cart.py:10-42 · codex]`처럼 어느 대화인지 나옵니다 |
+| 어디서나 | `<Space>aF` (AI ▸ Conversations) | 이어 갈 수 있는 대화 목록에서 골라 `c` |
+| 요청 기록 | `c` | 고른 요청이 속한 대화 |
+
+- 답 창에는 질문마다 `## Q1: Review`, `## Q2: 질문…`이 쌓입니다. 맨 위에 작업·백엔드·모델·질문 수가 보입니다.
+- 후속 질문은 그 대화를 시작한 **작업·백엔드·모델 그대로** 갑니다(Review로 시작했으면 Review 설정).
+- **보내는 것**: 첫 요청(코드·LSP·디버거 정보) 그대로 + 지금까지의 질문과 답 + 새 질문. CLI의 세션 기능을 쓰지 않아 claude·codex·gemini가 똑같이 동작하고,
+  실제로 보낸 내용이 요청 기록에 그대로 남습니다. 60,000자를 넘으면 오래된 답부터 빼고 보내며(`dropped_turns`로 기록), 첫 요청과 질문들은 늘 보냅니다.
+- 지난 세션의 대화도 요청 기록(30일)에서 다시 만들어 이어 갈 수 있습니다.
+- 다음 편집 제안(NES)은 대화가 아닙니다.
+- `:Ai follow [질문]`, `:Ai conversations`.
 
 ### 작업별 백엔드와 모델
 
@@ -275,10 +301,12 @@ kickstart의 `git status`에 나타나지 않습니다.
 ### 요청 기록 (`<Space>al`, AI ▸ Request log)
 
 새 탭에 왼쪽은 요청 목록(최근 것부터, 7일), 오른쪽은 고른 요청의 전체 기록이 나옵니다.
+`g`를 누르면 **대화 목록**(분석·디버그 대화만, 대화 하나에 한 줄, 오른쪽은 질문과 답)으로 바뀌고, 다시 `g`면 요청 목록으로 돌아옵니다.
+`<Space>aF`는 이 창을 대화 목록으로 엽니다.
 
 - **목록**: 상태(`…` 실행 중, `✓` 성공, `✗` 실패), 시각, 작업(nes/explain/review/ask/debug), 백엔드/모델, 걸린 시간, 제목. 실행 중인 요청도 바로 나타나고 끝나면 갱신됩니다.
 - **기록**: 실행한 **명령**, 작업 폴더, stdin으로 보낸 **입력(프롬프트) 전체**, 받은 **출력(답) 전체**, stderr, 종료 코드, 결과(예: `2 edits shown`, `parse error …`).
-- 키: `j`/`k`나 클릭으로 이동하면 오른쪽이 바뀜, `<CR>`/`l` 기록으로, `h` 목록으로, `y` 명령 복사, `Y` 답 복사, `o` 원본 파일 열기, `r` 새로고침, `q` 닫기.
+- 키: `j`/`k`나 클릭으로 이동하면 오른쪽이 바뀜, `<CR>`/`l` 기록으로, `h` 목록으로, `g` 요청/대화 목록 전환, `c` 그 대화에 후속 질문, `y` 명령 복사, `Y` 답 복사, `o` 원본 파일 열기, `r` 새로고침, `q` 닫기.
 - 원본: `<설정 폴더>/data/ai/logs/<날짜>.jsonl` — 요청 하나가 한 줄(JSON)이고, 위 내용을 가공하지 않고 그대로 남깁니다. 위치는 `HEES_NVIM_DATA`로 바꿀 수 있습니다.
 
 ### 실행 방식
@@ -299,8 +327,10 @@ kickstart 키와 Neovim 기본 키는 바꾸지 않습니다. 이 설정이 새�
 |---|---|---|
 | 오른쪽 클릭 | 노멀/비주얼/입력 | 컨텍스트 메뉴 (기본 PopUp 메뉴 대신) |
 | `<Space>m`, `Shift+F10` | 노멀/비주얼 | 컨텍스트 메뉴 |
+| 마우스 옆 버튼 (뒤로/앞으로) | 노멀 | 이동 기록 뒤로 `<C-o>` / 앞으로 `<C-i>` |
 | `<Space>o` | 노멀 | 코드 구조(outline) 사이드바 열기·닫기 |
-| `<Space>a…` | 노멀/비주얼 | AI: 다음 편집, 코드·디버그 분석, 작업별 백엔드/모델, 요청 기록 (위 표) |
+| `<Space>a…` | 노멀/비주얼 | AI: 다음 편집, 코드·디버그 분석, 후속 질문(`af`, `aF`), 작업별 백엔드/모델, 요청 기록 (위 표) |
+| `a` | AI 답 창 안 | 그 대화에 후속 질문 |
 
 kickstart의 키는 그대로입니다: 탐색기 `\`, 디버그 `F5` `F1` `F2` `F3` `F7` `<Space>b` `<Space>B`, LSP `grd` `grr` `gri` `grt` `grD` `grn` `gra` `gO` `gW`, 검색 `<Space>s…`, git `<Space>h…`.
 
