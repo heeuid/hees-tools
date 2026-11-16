@@ -1,7 +1,8 @@
 -- Explorer (kickstart's neo-tree) behavior on top of its own setup:
 --   * In the tree the cursor is hidden in normal mode; the highlighted row (neo-tree's
 --     cursorline, colored from the scheme's selection color) shows where you are. Command-line
---     and input prompts still show the cursor.
+--     and input prompts still show the cursor. When focus leaves the tree (mouse or keys) the
+--     row turns pale, and strong again when focus comes back.
 --   * l / → : directory: expand it, or step into it if already expanded; file: open it.
 --     h / ← : collapse the directory, or the parent one from a file (neo-tree's close_node).
 -- neo-tree sets its buffer mappings itself (`l` is focus_preview there), so ours are added
@@ -79,11 +80,48 @@ local function set_row_highlight()
     bg = next_bg
   end
   vim.api.nvim_set_hl(0, 'NeoTreeCursorLine', { bg = bg, bold = true })
+  -- Unfocused tree: 40% of the way from the background, at least a contrast of 1.15 so it stays visible.
+  local dim, k = mix(base, bg, 0.4), 0.4
+  while contrast(dim, base) < 1.15 and k < 1 do
+    k = k + 0.1
+    dim = mix(base, bg, k)
+  end
+  vim.api.nvim_set_hl(0, 'NeoTreeCursorLineNC', { bg = dim })
 end
 
 set_row_highlight()
 -- Scheduled so it runs after neo-tree re-creates its own groups for the new scheme.
 vim.api.nvim_create_autocmd('ColorScheme', { group = group, callback = function() vim.schedule(set_row_highlight) end })
+
+-- [[ Dim when unfocused ]]
+-- neo-tree maps CursorLine:NeoTreeCursorLine in its windows' 'winhighlight'. Tree windows other
+-- than the current one get NeoTreeCursorLineNC instead, so only the focused list shows the strong
+-- row. Checked on the same events as the cursor (SafeState covers mouse clicks and neo-tree's
+-- noautocmd window switches). While the right-click menu is open nothing changes, so a tree
+-- right-clicked keeps its strong row.
+
+local ACTIVE, INACTIVE = 'CursorLine:NeoTreeCursorLine', 'CursorLine:NeoTreeCursorLineNC'
+
+local function sync_focus()
+  local cur = vim.api.nvim_get_current_win()
+  if vim.bo[vim.api.nvim_win_get_buf(cur)].filetype == 'hees-menu' then return end
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.bo[buf].filetype == 'neo-tree' and vim.api.nvim_win_get_config(win).relative == '' then
+      local whl = vim.wo[win].winhighlight
+      local from, to = INACTIVE, ACTIVE
+      if win ~= cur then from, to = ACTIVE, INACTIVE end
+      local entries = vim.split(whl, ',', { plain = true })
+      for i, e in ipairs(entries) do
+        if e == from then entries[i] = to end
+      end
+      local want = table.concat(entries, ',')
+      if want ~= whl then vim.wo[win].winhighlight = want end
+    end
+  end
+end
+
+vim.api.nvim_create_autocmd({ 'WinEnter', 'BufEnter', 'SafeState' }, { group = group, callback = sync_focus })
 
 -- [[ h / l ]]
 

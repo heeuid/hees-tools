@@ -201,6 +201,15 @@ local function run()
     vim.api.nvim_set_current_win(editor_win)
     pcall(vim.api.nvim_exec_autocmds, 'SafeState', {})
     check('explorer: cursor shown in the editor after using the menu in the tree', vim.o.guicursor:find('HeesHiddenCursor', 1, true) == nil, vim.o.guicursor)
+    -- Row highlight: pale while focus is elsewhere, strong again when it comes back.
+    local function row_hl() return vim.tbl_contains(vim.split(vim.wo[tree].winhighlight, ','), 'CursorLine:NeoTreeCursorLineNC') and 'pale' or 'strong' end
+    check('explorer: row pale while the editor has focus', row_hl() == 'pale', vim.wo[tree].winhighlight)
+    vim.api.nvim_set_current_win(tree)
+    pcall(vim.api.nvim_exec_autocmds, 'SafeState', {})
+    check('explorer: row strong again when the tree has focus', row_hl() == 'strong' and not vim.wo[tree].winhighlight:find('NCNC', 1, true), vim.wo[tree].winhighlight)
+    local pale, strong, nbg = vim.api.nvim_get_hl(0, { name = 'NeoTreeCursorLineNC' }).bg, vim.api.nvim_get_hl(0, { name = 'NeoTreeCursorLine' }).bg, vim.api.nvim_get_hl(0, { name = 'Normal' }).bg
+    check('explorer: pale row color differs from both the strong row and the background', pale ~= nil and pale ~= strong and pale ~= nbg, vim.inspect { pale, strong, nbg })
+    vim.api.nvim_set_current_win(editor_win)
     if vim.api.nvim_buf_is_valid(tbuf) then vim.cmd 'Neotree close' end
     vim.cmd.cd(cwd)
     vim.api.nvim_set_current_buf(buf)
