@@ -21,7 +21,7 @@ end
 
 local function run()
   -- [[ Loading and keymaps ]]
-  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap' } do
+  for _, mod in ipairs { 'hees.colors', 'hees.ui', 'hees.nes', 'hees.context', 'hees.menu', 'catppuccin', 'bufferline', 'statuscol', 'neo-tree', 'dap', 'window-picker' } do
     check('module loaded: ' .. mod, package.loaded[mod] ~= nil)
   end
   local function has_map(mode, lhs) return vim.fn.maparg(lhs, mode) ~= '' end
@@ -117,9 +117,23 @@ local function run()
       if type(fs[name]) ~= 'function' then table.insert(missing, name) end
     end
     check('neo-tree commands used by the menu exist', #missing == 0, table.concat(missing, ','))
+    local pick = vim.tbl_filter(function(it) return it.label == 'Open in' end, ex)[1]
+    pick = pick and vim.tbl_filter(function(it) return it.label == 'Pick window…' end, pick.items)[1]
+    check('explorer menu has Open in > Pick window (w)', pick ~= nil and pick.hint == 'w' and pick.enabled)
+    local w_map = require('neo-tree').config.window.mappings['w']
+    check('neo-tree w maps to open_with_window_picker', w_map == 'open_with_window_picker', vim.inspect(w_map))
     vim.cmd 'Neotree close'
   end
   vim.api.nvim_set_current_buf(buf)
+
+  -- window-picker: with two other editor windows, a typed hint letter picks one of them.
+  local here = vim.api.nvim_get_current_win()
+  vim.cmd 'vsplit | split'
+  vim.api.nvim_set_current_win(here)
+  vim.api.nvim_feedkeys('F', 't', false)
+  local picked = require('window-picker').pick_window()
+  check('window-picker picks another window by letter', picked ~= nil and picked ~= here and vim.api.nvim_win_is_valid(picked), tostring(picked))
+  vim.cmd 'only'
 
   -- [[ NES ]]
   local nes = require 'hees.nes'

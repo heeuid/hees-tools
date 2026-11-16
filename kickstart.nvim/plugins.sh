@@ -10,7 +10,7 @@
 #   lua/hees/context.lua          우클릭 메뉴 내용 (편집기 / 탐색기 / 버퍼 탭)
 #   lua/hees/nes/                 NES: Claude / Codex / Gemini CLI 로 다음 편집 제안
 #
-#   install   파일 복사 + 필요한 플러그인(catppuccin, bufferline, statuscol) 설치
+#   install   파일 복사 + 필요한 플러그인(catppuccin, bufferline, statuscol, window-picker) 설치
 #   update    파일 다시 복사(이전 파일은 지움) + 그 플러그인들만 업데이트
 #   remove    파일과 플러그인 제거 (NES 기록·설정이 있는 data/ 는 --purge 일 때만 삭제)
 #   status    설치 여부와 overlay 와의 차이
@@ -21,8 +21,8 @@ TAG=plugins
 . "$(dirname "${BASH_SOURCE[0]}")/tools/common.sh"
 
 OVERLAY=$HERE/overlay
-# Plugins the overlay adds with vim.pack (kept in sync with overlay/lua/hees/colors.lua and ui.lua).
-PACK_PLUGINS=(catppuccin bufferline.nvim statuscol.nvim)
+# Plugins the overlay adds with vim.pack (kept in sync with overlay/lua/hees/colors.lua, ui.lua, window_picker.lua).
+PACK_PLUGINS=(catppuccin bufferline.nvim statuscol.nvim nvim-window-picker)
 # Paths the overlay owns inside the config. lua/custom/plugins/hees.lua is the old entry point;
 # it is listed so updates delete it and the overlay isn't loaded twice.
 OWNED=(plugin/hees.lua lua/hees lua/custom/plugins/hees.lua)

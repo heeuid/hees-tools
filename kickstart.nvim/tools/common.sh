@@ -74,7 +74,7 @@ run_sync() { # app mode [plugins]
   sync=$HERE/tools/sync.lua
   sync=${sync// /\\ }
   say "Neovim 헤드리스 동기화 ($2) — 플러그인/LSP/디버거 설치를 기다립니다"
-  if ! NVIM_APPNAME=$1 HEES_SYNC=$2 HEES_SYNC_PLUGINS=${3:-} "$exe" --headless -c "luafile $sync"; then
+  if ! NVIM_APPNAME=$1 HEES_SYNC=$2 HEES_SYNC_PLUGINS=${3:-} "$exe" --headless --cmd "luafile $sync"; then
     warn "동기화가 실패로 끝났습니다. nvk 를 실행해 메시지를 확인하세요."
   fi
   echo

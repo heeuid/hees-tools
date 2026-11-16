@@ -222,6 +222,7 @@ local function explorer_items(state)
       label = 'Open in',
       enabled = is_file,
       items = {
+        { label = 'Pick window…', hint = 'w', action = run 'open_with_window_picker', enabled = package.loaded['window-picker'] ~= nil },
         { label = 'Vertical split', hint = 's', action = run 'open_vsplit' },
         { label = 'Horizontal split', hint = 'S', action = run 'open_split' },
         { label = 'New tab', hint = 't', action = run 'open_tabnew' },

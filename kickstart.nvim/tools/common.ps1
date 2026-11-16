@@ -93,7 +93,7 @@ function Invoke-Sync([string]$Tag, [string]$App, [string]$Mode, [string]$Plugins
     $env:NVIM_APPNAME = $App
     $env:HEES_SYNC = $Mode
     $env:HEES_SYNC_PLUGINS = $Plugins
-    & $exe --headless -c "luafile $sync" | Out-Host
+    & $exe --headless --cmd "luafile $sync" | Out-Host
     Write-Host ''
     if ($LASTEXITCODE -ne 0) { Warn $Tag "동기화가 코드 $LASTEXITCODE 로 끝났습니다. nvk 를 실행해 메시지를 확인하세요." }
   } finally {

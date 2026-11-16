@@ -1,23 +1,49 @@
 -- Run inside the configured Neovim to finish (or update) everything the config installs:
---   nvim --headless -c "luafile tools/sync.lua"            install mode: wait for first-run installs
---   HEES_SYNC=update nvim --headless -c "luafile …"        update mode: also update plugins, tools, parsers
+--   nvim --headless --cmd "luafile tools/sync.lua"            install mode: wait for first-run installs
+--   HEES_SYNC=update nvim --headless --cmd "luafile …"        update mode: also update plugins, tools, parsers
 --
 -- vim.pack installs plugins synchronously during startup, but mason (LSP servers, formatters,
 -- debug adapters) and nvim-treesitter (parsers) work asynchronously; quitting early aborts them.
 -- Optional HEES_SYNC_PLUGINS="name1,name2" limits `vim.pack.update` to those plugins.
+--
+-- Loaded with --cmd (before init.lua) so that messages printed while the config loads go through
+-- the line-based output below; headless Neovim would otherwise run them together on one line.
 
 local mode = vim.env.HEES_SYNC or 'install'
 local timeout = 20 * 60 * 1000
 
 local function say(msg) io.stdout:write('[sync] ' .. msg .. '\n') end
 
-local function mason_busy()
-  local ok, registry = pcall(require, 'mason-registry')
-  if not ok then return false end
-  for _, pkg in ipairs(registry.get_all_packages()) do
-    if pkg:is_installing() then return true end
+-- One line per message: notifications (mason, mason-tool-installer, mason-nvim-dap) and
+-- echo/progress messages (vim.pack, nvim-treesitter). Headless Neovim's own output is replaced,
+-- not added to, so nothing is printed twice.
+local last_line
+local function line(text)
+  text = text:gsub('\n+$', '')
+  if text == '' or text == last_line then return end
+  last_line = text
+  io.stdout:write(text .. '\n')
+end
+vim.notify = function(msg) line(tostring(msg)) end
+vim.api.nvim_echo = function(chunks, _, opts)
+  local text = table.concat(vim.tbl_map(function(c) return c[1] end, chunks))
+  if opts and opts.kind == 'progress' then
+    text = (opts.title and (opts.title .. ': ') or '') .. (opts.percent and ('%3d%% '):format(opts.percent) or '') .. text
   end
-  return false
+  line(text)
+  return -1
+end
+
+--- Names of mason packages that are installing right now.
+local function mason_installing()
+  local ok, registry = pcall(require, 'mason-registry')
+  if not ok then return {} end
+  local names = {}
+  for _, pkg in ipairs(registry.get_all_packages()) do
+    if pkg:is_installing() then table.insert(names, pkg.name) end
+  end
+  table.sort(names)
+  return names
 end
 
 --- What is actually on in this config, read from the running Neovim.
@@ -67,16 +93,27 @@ local function main()
     end
   end
 
-  -- Give deferred installers (mason-tool-installer, mason-nvim-dap) a moment to start, then wait.
+  -- Give deferred installers (mason-tool-installer, mason-nvim-dap) a moment to start, then wait,
+  -- saying every 15 s what is still being downloaded so a long install doesn't look stuck.
   vim.wait(3000)
-  if mason_busy() then say 'waiting for mason installs…' end
-  if not vim.wait(timeout, function() return not mason_busy() end, 1000) then say 'mason is still busy after 20 minutes; giving up' end
+  local started, last = vim.uv.now(), nil
+  local finished = vim.wait(timeout, function()
+    local busy = mason_installing()
+    if #busy == 0 then return true end
+    local now = vim.uv.now()
+    if not last or now - last >= 15000 then
+      last = now
+      say(('설치 중 %d개 (%d초 경과): %s'):format(#busy, (now - started) / 1000, table.concat(busy, ', ')))
+    end
+    return false
+  end, 1000)
+  if not finished then say '20분이 지나도 mason 설치가 끝나지 않아 중단합니다. 다시 실행하면 이어서 설치합니다.' end
   report()
   say 'done'
   vim.cmd 'qa!'
 end
 
--- `-c` runs before VimEnter, but some installers (mason-tool-installer) start on VimEnter.
+-- --cmd runs before the config and VimEnter; some installers (mason-tool-installer) start on VimEnter.
 if vim.v.vim_did_enter == 1 then
   main()
 else
