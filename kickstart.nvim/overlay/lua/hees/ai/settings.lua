@@ -74,23 +74,23 @@ end
 --- "codex / gpt-x" style summary of a task's setting for menus and messages.
 function M.describe(task)
   local backend, model, own_backend, own_model = M.resolve(task)
-  return ('%s%s / %s%s'):format(backend, own_backend and '' or ' (default)', model or 'CLI default', own_model and '' or (model and ' (default)' or ''))
+  return ('%s%s / %s%s'):format(backend, own_backend and '' or ' (기본)', model or 'CLI 기본', own_model and '' or (model and ' (기본)' or ''))
 end
 
 function M.set_backend(name)
-  if not vim.tbl_contains(backends.names, name) then return vim.notify('AI: unknown backend ' .. tostring(name), vim.log.levels.ERROR) end
-  if not backends.available(name) then vim.notify('AI: ' .. name .. ' CLI is not on PATH', vim.log.levels.WARN) end
+  if not vim.tbl_contains(backends.names, name) then return vim.notify('AI: 알 수 없는 백엔드 ' .. tostring(name), vim.log.levels.ERROR) end
+  if not backends.available(name) then vim.notify('AI: ' .. name .. ' CLI 가 PATH 에 없습니다', vim.log.levels.WARN) end
   load().backend = name
   save()
-  vim.notify('AI: default backend = ' .. name)
+  vim.notify('AI: 전체 기본 백엔드 = ' .. name)
 end
 
 function M.select_backend()
   vim.ui.select(backends.names, {
-    prompt = 'AI default backend',
+    prompt = 'AI 전체 기본 백엔드',
     format_item = function(name)
       local mark = name == load().backend and '● ' or '  '
-      return mark .. name .. (backends.available(name) and '' or '  (not installed)')
+      return mark .. name .. (backends.available(name) and '' or '  (설치 안 됨)')
     end,
   }, function(choice)
     if choice then M.set_backend(choice) end
@@ -99,8 +99,8 @@ end
 
 --- Set a task's backend; nil = follow the default backend.
 function M.set_task_backend(task, name)
-  if name and not vim.tbl_contains(backends.names, name) then return vim.notify('AI: unknown backend ' .. tostring(name), vim.log.levels.ERROR) end
-  if name and not backends.available(name) then vim.notify('AI: ' .. name .. ' CLI is not on PATH', vim.log.levels.WARN) end
+  if name and not vim.tbl_contains(backends.names, name) then return vim.notify('AI: 알 수 없는 백엔드 ' .. tostring(name), vim.log.levels.ERROR) end
+  if name and not backends.available(name) then vim.notify('AI: ' .. name .. ' CLI 가 PATH 에 없습니다', vim.log.levels.WARN) end
   task_state(task).backend = name
   save()
   vim.notify(('AI: %s → %s'):format(M.labels[task], M.describe(task)))
@@ -110,14 +110,14 @@ end
 function M.set_task_model(task, model)
   local backend = M.resolve(task)
   if model == nil then
-    local default = backends.default_models[kind(task)][backend] or 'CLI default'
-    local choices = vim.list_extend({ '(default: ' .. default .. ')' }, vim.deepcopy(M.known_models[backend] or {}))
-    table.insert(choices, 'Other…')
-    return vim.ui.select(choices, { prompt = ('%s model (%s)'):format(M.labels[task], backend) }, function(choice, idx)
+    local default = backends.default_models[kind(task)][backend] or 'CLI 기본'
+    local choices = vim.list_extend({ '(기본값: ' .. default .. ')' }, vim.deepcopy(M.known_models[backend] or {}))
+    table.insert(choices, '직접 입력…')
+    return vim.ui.select(choices, { prompt = ('%s 모델 (%s)'):format(M.labels[task], backend) }, function(choice, idx)
       if not choice then return end
       if idx == 1 then return M.set_task_model(task, '') end
-      if choice == 'Other…' then
-        return vim.ui.input({ prompt = ('%s model name for %s: '):format(M.labels[task], backend), default = task_state(task).models[backend] or '' }, function(input)
+      if choice == '직접 입력…' then
+        return vim.ui.input({ prompt = ('%s 모델 이름 (%s): '):format(M.labels[task], backend), default = task_state(task).models[backend] or '' }, function(input)
           if input ~= nil then M.set_task_model(task, input) end
         end)
       end
@@ -143,7 +143,7 @@ function M.set_auto(on)
   if on == nil then on = not s.auto end
   s.auto = on
   save()
-  vim.notify('AI: auto next-edit suggest ' .. (on and 'on' or 'off'))
+  vim.notify('AI: 자동 다음 편집 제안 ' .. (on and '켬' or '끔'))
 end
 
 --- Drop the cached state (tests switch HEES_NVIM_DATA).

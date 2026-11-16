@@ -23,7 +23,7 @@ local function task_items(task)
   return function()
     local backend, _, own_backend = settings.resolve(task)
     local backend_items = {
-      { label = 'Default (' .. settings.backend() .. ')', checked = not own_backend, action = function() settings.set_task_backend(task, nil) end },
+      { label = '기본 따르기 (' .. settings.backend() .. ')', checked = not own_backend, action = function() settings.set_task_backend(task, nil) end },
     }
     for _, name in ipairs(backends.names) do
       local available = backends.available(name)
@@ -54,11 +54,57 @@ local function settings_items()
       action = function() settings.set_backend(name) end,
     })
   end
-  local items = { { label = 'Default backend: ' .. settings.backend(), hint = '<leader>ab', items = default_items }, { sep = true } }
+  local items = { { label = '전체 기본 백엔드: ' .. settings.backend(), hint = '<leader>ab', items = default_items }, { sep = true } }
   for _, task in ipairs(settings.tasks) do
     table.insert(items, { label = ('%s: %s'):format(settings.labels[task], settings.describe(task)), items = task_items(task) })
   end
   return items
+end
+
+-- [[ Keyboard pickers: task first, then its backend or model ]]
+
+local function pick_task(prompt, with_default, on_choice)
+  local choices = with_default and { 'default' } or {}
+  vim.list_extend(choices, settings.tasks)
+  vim.ui.select(choices, {
+    prompt = prompt,
+    format_item = function(task)
+      if task == 'default' then return '전체 기본 백엔드: ' .. settings.backend() end
+      return ('%s: %s'):format(settings.labels[task], settings.describe(task))
+    end,
+  }, function(task)
+    if task then on_choice(task) end
+  end)
+end
+
+--- <leader>ab: choose a task (or the default), then its backend.
+function M.pick_backend()
+  pick_task('백엔드를 바꿀 작업', true, function(task)
+    if task == 'default' then return settings.select_backend() end
+    local current, _, own = settings.resolve(task)
+    local choices = vim.list_extend({ 'default' }, vim.deepcopy(backends.names))
+    vim.ui.select(choices, {
+      prompt = settings.labels[task] .. ' 백엔드',
+      format_item = function(name)
+        if name == 'default' then return (not own and '● ' or '  ') .. '기본 따르기 (' .. settings.backend() .. ')' end
+        return ((own and name == current) and '● ' or '  ') .. name .. (backends.available(name) and '' or '  (설치 안 됨)')
+      end,
+    }, function(name)
+      if name then settings.set_task_backend(task, name ~= 'default' and name or nil) end
+    end)
+  end)
+end
+
+--- <leader>am: choose a task, then its model (for the backend it runs with).
+function M.pick_model()
+  pick_task('모델을 바꿀 작업', false, function(task) settings.set_task_model(task, nil) end)
+end
+
+--- <leader>as: the backends & models menu at the cursor (keyboard: j/k, Enter, h, Esc).
+function M.open_settings()
+  local menu = require 'hees.menu'
+  local row, col = menu.cursor_anchor()
+  menu.open(settings_items, { row = row, col = col })
 end
 
 --- The AI submenu of the right-click menu.
@@ -82,7 +128,7 @@ function M.menu_items(visual)
     { label = 'Debug state', hint = '<leader>ag', items = M.debug_items, enabled = ai_debug.is_stopped },
     { label = 'Cancel running request', hint = '<leader>ac', action = M.cancel, enabled = function() return nes.is_busy() or analyze.is_busy() end },
     { sep = true },
-    { label = 'Backends & models', items = settings_items },
+    { label = 'Backends & models', hint = '<leader>as', items = settings_items },
     { label = 'Auto next-edit suggest', hint = '<leader>at', checked = settings.auto(), action = function() settings.set_auto() end },
     { label = 'Request log', hint = '<leader>al', action = viewer.open },
   })
@@ -177,8 +223,9 @@ function M.setup(opts)
   both('<leader>aq', 'ask', 'AI: ask a [Q]uestion about code')
   vim.keymap.set('n', '<leader>ag', function() ai_debug.run() end, { desc = 'AI: explain the paused debu[G] state' })
   vim.keymap.set('n', '<leader>ac', M.cancel, { desc = 'AI: [C]ancel request' })
-  vim.keymap.set('n', '<leader>ab', settings.select_backend, { desc = 'AI: default [B]ackend' })
-  vim.keymap.set('n', '<leader>am', function() settings.set_task_model('nes', nil) end, { desc = 'AI: next-edit [M]odel' })
+  vim.keymap.set('n', '<leader>ab', M.pick_backend, { desc = 'AI: [B]ackend of a task' })
+  vim.keymap.set('n', '<leader>am', M.pick_model, { desc = 'AI: [M]odel of a task' })
+  vim.keymap.set('n', '<leader>as', M.open_settings, { desc = 'AI: backends & models [S]ettings menu' })
   vim.keymap.set('n', '<leader>at', function() settings.set_auto() end, { desc = 'AI: [T]oggle auto suggest' })
   vim.keymap.set('n', '<leader>al', viewer.open, { desc = 'AI: request [L]og' })
   local has_wk, wk = pcall(require, 'which-key')

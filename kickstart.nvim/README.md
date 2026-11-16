@@ -246,13 +246,19 @@ kickstart의 `git status`에 나타나지 않습니다.
 | Explain / Review / Ask | 코드 분석 |
 | Debug state (`debug`) | 디버그 상태 분석 |
 
-- **백엔드**: 작업 설정 → 기본 백엔드(`<Space>ab`, AI ▸ Backends & models ▸ Default backend).
+- **백엔드**: 작업 설정 → 전체 기본 백엔드.
 - **모델**: 작업 설정(백엔드마다 따로 저장) → 기본값(claude 다음 편집은 `haiku`, 나머지는 CLI 기본 모델).
-- **메뉴**: AI ▸ **Backends & models ▸** 에 작업마다 지금 값이 보입니다(`Review: codex / some-model`).
-  작업을 고르면 **Backend ▸**(기본 따르기 / claude / codex / gemini), **Model…**, **Reset to defaults**.
-  - Model…: claude는 `haiku`·`sonnet`·`opus` 중에서 고르거나 직접 입력, codex·gemini는 그 CLI가 받는 이름을 입력합니다.
+
+| 키 | 하는 일 |
+|---|---|
+| `<Space>ab` | 작업 고르기(전체 기본 / Next edit / Explain / Review / Ask / Debug state) → 백엔드 고르기(기본 따르기 / claude / codex / gemini) |
+| `<Space>am` | 작업 고르기 → 모델 고르기(claude는 `haiku`·`sonnet`·`opus`, `직접 입력…`, `(기본값)`) |
+| `<Space>as` | 커서 위치에 설정 메뉴: 작업마다 지금 값 → Backend / Model / Reset (`j`/`k`, `Enter`, `h`, `Esc`) |
+
+- 목록에는 지금 값이 함께 보이고(`Explain: codex / CLI 기본`), 고른 값에는 `●`가 붙습니다.
+- 우클릭 **AI ▸ Backends & models ▸** 도 같은 메뉴입니다.
+- codex·gemini 모델은 그 CLI가 받는 이름을 `직접 입력…`으로 넣습니다.
 - **명령**: `:Ai task review backend codex`, `:Ai task review model <이름>`(`default`면 기본값), `:Ai task review reset`, `:Ai status`(전체 보기).
-- `<Space>am`은 다음 편집 모델을 바로 고릅니다.
 - 설정은 `<설정 폴더>/data/ai/state.json`. 예전 "다음 편집 모델 / 분석 모델" 설정은 처음 불러올 때 작업별 설정으로 옮겨집니다.
 
 ### 요청 기록 (`<Space>al`, AI ▸ Request log)
