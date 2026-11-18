@@ -194,6 +194,8 @@ kickstart의 `git status`에 나타나지 않습니다.
   Search         ▸
   ─────────
   Window         ▸
+  Buffer         ▸
+  Tab            ▸
   File           ▸
 ```
 
@@ -215,9 +217,34 @@ kickstart의 `git status`에 나타나지 않습니다.
 | Move to new tab | `<C-w>T` | 이 창을 새 탭으로 옮기기 |
 | Equalize sizes | `<C-w>=` | 창 크기 똑같이 |
 | Close window / Close other windows | `<C-w>c` / `<C-w>o` | 이 창 / 나머지 창 닫기 |
+| Quit Neovim | `:qa` | Neovim 종료 (아래) |
 
-창이 하나뿐이면 옮기기·크기 맞추기·닫기 항목은 흐리게 표시됩니다. 파일을 분할로 여는 것은 탐색기 우클릭
+창이 하나뿐이면 옮기기·크기 맞추기·닫기 항목은 흐리게 표시됩니다(마지막 창은 `<C-w>c`로 닫히지 않습니다). 파일을 분할로 여는 것은 탐색기 우클릭
 (**Open in ▸**)과 버퍼 탭 우클릭 메뉴에 있습니다.
+
+**Quit Neovim**: 저장 안 한 파일이 없으면 바로 종료합니다. 있으면 메뉴로 묻습니다(파일 이름 표시) —
+**Save all and quit** (`:wqa`) / **Quit without saving** (`:qa!`) / **Cancel**. 키보드 프롬프트가 아니라 메뉴라서 마우스만으로 끝낼 수 있습니다.
+이름 없는 새 파일이 있으면 `:wqa`가 실패하고(E141) 메시지만 보이며 종료하지 않습니다.
+
+**Buffer ▸** (지금 버퍼)
+
+| 항목 | 같은 키 | |
+|---|---|---|
+| Next / Previous buffer | `]b` / `[b` | 다음 / 이전 버퍼 (Neovim 기본 키) |
+| Find buffer… | `<Space><Space>` | 열린 버퍼 목록에서 고르기 (kickstart의 telescope) |
+| Save / Save all | `:w` / `:wa` | 저장 / 전부 저장 (바뀐 것이 없으면 흐리게) |
+| Close buffer | | 버퍼만 닫고 창은 그대로 (버퍼 탭 우클릭의 Close와 같음) |
+| Close other buffers | | 나머지 버퍼 닫기 |
+
+**Tab ▸** (탭 페이지: 창 배치를 하나씩 따로 가짐)
+
+| 항목 | 같은 키 | |
+|---|---|---|
+| New tab | `:tabnew` | 새 탭 |
+| Next / Previous tab | `gt` / `gT` | 다음 / 이전 탭 |
+| Close tab / Close other tabs | `:tabclose` / `:tabonly` | 이 탭 / 나머지 탭 닫기 |
+
+탭이 하나뿐이면 이동·닫기 항목은 흐리게 표시됩니다.
 
 ## AI (Claude / Codex / Gemini)
 

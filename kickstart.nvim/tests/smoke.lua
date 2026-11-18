@@ -86,7 +86,22 @@ local function run()
   local top = ctx._buffer_items(false)
   local labels = vim.tbl_map(function(it) return it.label or '---' end, top)
   check('buffer menu has LSP/Debug/AI/Git/Search groups', vim.tbl_contains(labels, 'LSP') and vim.tbl_contains(labels, 'Debug') and vim.tbl_contains(labels, 'AI'), table.concat(labels, ', '))
-  check('buffer menu top level is short (<= 17 rows)', #top <= 17, #top)
+  check('buffer menu top level is short (<= 19 rows)', #top <= 19, #top)
+  local function sub_labels(name)
+    local g = vim.tbl_filter(function(it) return it.label == name end, top)[1]
+    local items = g and (type(g.items) == 'function' and g.items() or g.items) or {}
+    return vim.tbl_map(function(it) return it.label or '---' end, items)
+  end
+  check('Window/Buffer/Tab groups', vim.tbl_contains(sub_labels 'Window', 'Quit Neovim') and vim.tbl_contains(sub_labels 'Buffer', 'Close buffer') and vim.tbl_contains(sub_labels 'Tab', 'New tab'), table.concat(sub_labels 'Buffer', ' | '))
+  -- Quit with unsaved changes asks in a menu instead of quitting (never reach :qa here).
+  local scratch = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_lines(scratch, 0, -1, false, { 'unsaved' })
+  check('quit: test buffer is modified', vim.bo[scratch].modified)
+  ctx.quit()
+  local quit_rows = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  check('quit: unsaved changes ask save / discard / cancel', menu.is_open() and table.concat(quit_rows, '\n'):find('Save all and quit', 1, true) and table.concat(quit_rows, '\n'):find('Quit without saving', 1, true) and quit_rows[1]:find('1 unsaved', 1, true), table.concat(quit_rows, '\n'))
+  menu.close()
+  vim.api.nvim_buf_delete(scratch, { force = true })
   ctx.open_at_cursor(false)
   check('context menu opens from keyboard', menu.is_open())
   local rendered = vim.api.nvim_buf_get_lines(0, 0, -1, false)

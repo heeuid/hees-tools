@@ -200,6 +200,65 @@ local function window_items()
     { label = 'Equalize sizes', hint = '<C-w>=', action = wincmd '=', enabled = several },
     { label = 'Close window', hint = '<C-w>c', action = wincmd 'c', enabled = several or #vim.api.nvim_list_tabpages() > 1 },
     { label = 'Close other windows', hint = '<C-w>o', action = wincmd 'o', enabled = several },
+    sep,
+    { label = 'Quit Neovim', hint = ':qa', action = function() M.quit() end },
+  }
+end
+
+--- Run an Ex command, showing its error (e.g. E37, E141, E948) instead of a stack trace.
+local function try(cmd)
+  local ok, err = pcall(vim.cmd, cmd)
+  if not ok then vim.notify(tostring(err):gsub('^.-:%d+: ', ''), vim.log.levels.ERROR) end
+end
+
+--- Quit Neovim. With unsaved changes, asks in a menu (save all / discard / cancel) instead of
+--- :confirm's keyboard prompt, so it can be done with the mouse alone.
+function M.quit()
+  local unsaved = vim.tbl_filter(function(b) return vim.bo[b].modified and vim.bo[b].buflisted end, vim.api.nvim_list_bufs())
+  if #unsaved == 0 then return try 'qa' end
+  local names = vim.tbl_map(function(b)
+    local name = vim.api.nvim_buf_get_name(b)
+    return name == '' and '[No Name]' or vim.fn.fnamemodify(name, ':t')
+  end, unsaved)
+  local anchor = {}
+  if vim.fn.getmousepos().screenrow == 0 then anchor.row, anchor.col = menu.cursor_anchor() end
+  menu.open({
+    { label = ('%d unsaved: %s'):format(#unsaved, table.concat(names, ', ', 1, math.min(#names, 3)) .. (#names > 3 and ', …' or '')), enabled = false },
+    sep,
+    { label = 'Save all and quit', hint = ':wqa', action = function() try 'wqa' end },
+    { label = 'Quit without saving', hint = ':qa!', action = function() try 'qa!' end },
+    { label = 'Cancel', hint = '<Esc>', action = function() end },
+  }, anchor)
+end
+
+--- The current buffer: switch, save, close (the window stays, like the buffer tab's Close).
+local function current_buffer_items()
+  local listed = #vim.fn.getbufinfo { buflisted = 1 }
+  local modified = vim.bo.modified
+  local any_modified = #vim.tbl_filter(function(b) return b.changed == 1 end, vim.fn.getbufinfo { buflisted = 1 }) > 0
+  return {
+    { label = 'Next buffer', hint = ']b', action = function() try 'bnext' end, enabled = listed > 1 },
+    { label = 'Previous buffer', hint = '[b', action = function() try 'bprevious' end, enabled = listed > 1 },
+    { label = 'Find buffer…', hint = '<leader><leader>', action = '<leader><leader>', enabled = has_telescope },
+    sep,
+    { label = 'Save', hint = ':w', action = function() try 'write' end, enabled = modified and vim.bo.buftype == '' },
+    { label = 'Save all', hint = ':wa', action = function() try 'wall' end, enabled = any_modified },
+    sep,
+    { label = 'Close buffer', action = function() require('mini.bufremove').delete(0, false) end },
+    { label = 'Close other buffers', action = function() try 'BufferLineCloseOthers' end, enabled = listed > 1 },
+  }
+end
+
+--- Tab pages (each holds its own window layout).
+local function tabpage_items()
+  local several = #vim.api.nvim_list_tabpages() > 1
+  return {
+    { label = 'New tab', hint = ':tabnew', action = function() vim.cmd 'tabnew' end },
+    { label = 'Next tab', hint = 'gt', action = function() vim.cmd 'tabnext' end, enabled = several },
+    { label = 'Previous tab', hint = 'gT', action = function() vim.cmd 'tabprevious' end, enabled = several },
+    sep,
+    { label = 'Close tab', hint = ':tabclose', action = function() try 'tabclose' end, enabled = several },
+    { label = 'Close other tabs', hint = ':tabonly', action = function() try 'tabonly' end, enabled = several },
   }
 end
 
@@ -234,6 +293,8 @@ local function buffer_items(visual)
     { label = 'Search', items = function() return search_items(visual) end, enabled = has_telescope },
     sep,
     { label = 'Window', items = window_items },
+    { label = 'Buffer', items = current_buffer_items },
+    { label = 'Tab', items = tabpage_items },
     { label = 'File', items = file_items, enabled = file ~= '' },
   }
   if visual then
