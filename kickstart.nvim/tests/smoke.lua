@@ -370,6 +370,37 @@ local function run()
   check('lsp context: hover text', #lctx.hover > 0, vim.inspect(lctx.hover))
   check('lsp context: document outline', #lctx.outline >= 2, vim.inspect(lctx.outline))
 
+  -- [[ Workspace root never the home folder ]]
+  check('lsp root: lua_ls has the home guard', type(vim.lsp.config.lua_ls.root_dir) == 'function')
+  do
+    local lr = require 'hees.lsp_root'
+    local base = vim.fs.normalize(vim.fn.tempname())
+    local fake_home = base .. '/home'
+    for _, d in ipairs { fake_home .. '/proj/.git', fake_home .. '/proj/sub', fake_home .. '/loose', base .. '/outside/.git' } do
+      vim.fn.mkdir(d, 'p')
+    end
+    vim.fn.writefile({ '{}' }, fake_home .. '/.luarc.json') -- the stray marker that made lua_ls index all of home
+    local real_home, real_profile = vim.env.HOME, vim.env.USERPROFILE
+    vim.env.HOME, vim.env.USERPROFILE = fake_home, fake_home
+    local guard = lr.guard { { '.emmyrc.json', '.luarc.json', '.luarc.jsonc' }, { '.stylua.toml' }, { '.git' } }
+    local function root_for(path)
+      vim.fn.writefile({ 'return 1' }, path)
+      local got, called = nil, false
+      guard(vim.fn.bufadd(path), function(r) called, got = true, r end)
+      return called and (got and got:sub(#base + 1) or 'nil') or 'not started'
+    end
+    local results = {
+      project = root_for(fake_home .. '/proj/sub/a.lua'),
+      loose = root_for(fake_home .. '/loose/b.lua'),
+      in_home = root_for(fake_home .. '/c.lua'),
+      outside = root_for(base .. '/outside/d.lua'),
+    }
+    vim.env.HOME, vim.env.USERPROFILE = real_home, real_profile
+    check('lsp root: project under home uses its .git, not ~/.luarc.json', results.project == '/home/proj', vim.inspect(results))
+    check('lsp root: no marker below home -> the file folder; file in home -> no server', results.loose == '/home/loose' and results.in_home == 'not started', vim.inspect(results))
+    check('lsp root: projects outside home unchanged', results.outside == '/outside', vim.inspect(results))
+  end
+
   -- Outline sidebar (aerial) on the same file.
   local code_win = vim.api.nvim_get_current_win()
   require('aerial').open { focus = false }

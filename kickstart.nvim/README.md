@@ -116,6 +116,13 @@ kickstart의 `git status`에 나타나지 않습니다.
 
   목록은 `tools/patch-kickstart.lua`의 `LSP` 표에서 바꿉니다.
 
+- **작업 루트로 홈 폴더를 쓰지 않음**: 언어 서버는 표시 파일(`.git`, `.luarc.json`, `pyproject.toml` 등)로 프로젝트 루트를 정합니다.
+  홈 폴더에 이런 파일이 하나 있으면(예: lua_ls의 "Increase upper limit"를 누르면 생기는 `~/.luarc.json`) 그 서버가 **홈 폴더 전체**를
+  프로젝트로 잡아 느려지고, lua_ls는 "Preloaded files has reached the upper limit (10000)" 안내를 띄웁니다.
+  그래서 루트가 홈으로 나오면 홈 바로 아래까지만 다시 찾아 가장 가까운 프로젝트(`.git` 등)를 쓰고, 표시 파일이 없으면 그 파일의 폴더를,
+  홈에 바로 있는 파일이면 서버를 띄우지 않습니다. 홈 밖의 프로젝트는 그대로입니다. 켜져 있는 모든 서버에 적용됩니다(`lua/hees/lsp_root.lua`).
+  이 안내가 뜨면 "Increase upper limit"는 고르지 말고 `Esc`로 닫으세요.
+
 ### 코드 구조 보기 (outline, 호출·타입 계층)
 
 - **Outline 사이드바** (`<Space>o`, 우클릭 **LSP ▸ Structure ▸ Outline sidebar** 또는 **File ▸ Code outline**):

@@ -12,5 +12,6 @@ require 'hees.ui' -- clickable buffer tabs and gutter, overlay highlights
 require 'hees.window_picker' -- explorer `w`: open a file in the window you pick
 require 'hees.explorer' -- explorer: row highlight instead of a cursor, h/l collapse/expand/open
 require 'hees.outline' -- code structure sidebar (aerial.nvim), <leader>o
+require 'hees.lsp_root' -- language servers never take the home folder as their workspace root
 require('hees.ai').setup() -- Claude / Codex / Gemini: next edit suggestions, code analysis with LSP, request log
 require('hees.context').setup() -- right-click (and <leader>m / Shift+F10) context menus
